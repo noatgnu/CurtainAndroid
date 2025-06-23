@@ -546,9 +546,6 @@ class CurtainDataService {
                     "name" to sample
                 )
             }
-            Log.d("CurtainDataService", "Processed ${sampleMap}")
-
-            // Update the sampleMap through reflection since it's a val property
             if (sampleMap.isNotEmpty()) {
                 val updatedMap = if (curtainSettings.sampleMap.isEmpty()) {
                     sampleMap
@@ -611,9 +608,26 @@ class CurtainDataService {
                     updatedColorMap[selection] = color
                 }
             }
-            curtainSettings = curtainSettings.copy(
-                colorMap = updatedColorMap
-            )
+
+            // Merge color map with existing settings
+            if (curtainSettings.colorMap.isEmpty()) {
+                curtainSettings = curtainSettings.copy(
+                    colorMap = updatedColorMap
+                )
+            } else {
+
+                val newCombinedMap = curtainSettings.colorMap.toMutableMap()
+                for ((condition, color) in updatedColorMap) {
+                    if (!curtainSettings.colorMap.containsKey(condition)) {
+                        newCombinedMap[condition] = color
+                    }
+                }
+                curtainSettings = curtainSettings.copy(
+                    colorMap = newCombinedMap
+                )
+            }
+
+            Log.d("CurtainDataService", "Color map after processing: ${curtainSettings.colorMap}")
 
             // Update condition order
             if (curtainSettings.conditionOrder.isEmpty()) {

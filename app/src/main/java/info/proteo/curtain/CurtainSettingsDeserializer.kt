@@ -499,7 +499,6 @@ fun manualDeserializeSettings(map: Map<String, Any?>): CurtainSettings {
         peptideCountData = map["peptideCountData"] as? Map<String, Any> ?: mapOf(),
         viewPeptideCountData = map["viewPeptideCountData"] as? Boolean ?: false
     )
-    Log.d("CurtainSettingsDeserializer", "Deserialized CurtainSettings: ${result.volcanoAxis}")
     return result
 }
 

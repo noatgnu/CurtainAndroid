@@ -14,12 +14,20 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import info.proteo.curtain.AppData
+import info.proteo.curtain.CurtainData
+import info.proteo.curtain.CurtainSettings
 import info.proteo.curtain.VolcanoAxis
 import info.proteo.curtain.databinding.FragmentVolcanoPlotTabBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.collections.get
+import kotlin.collections.set
 import kotlin.text.get
+import kotlin.toString
 
 class VolcanoPlotTabFragment : Fragment() {
     private var _binding: FragmentVolcanoPlotTabBinding? = null
@@ -44,7 +52,7 @@ class VolcanoPlotTabFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.curtainData.collect { curtainData ->
                     if (curtainData != null) {
-                        loadVolcanoPlot()
+                        loadVolcanoPlotDefer()
                     }
                 }
             }
@@ -81,13 +89,15 @@ class VolcanoPlotTabFragment : Fragment() {
         }
     }
 
-    private fun loadVolcanoPlot() {
-        Log.d("VolcanoPlot", "Loading volcano plot")
-        val curtainData = viewModel.curtainData.value ?: return
-        val curtainSettings = viewModel.curtainSettings.value ?: return
 
-        // Show loading initially
-        showLoading(true)
+
+    private suspend fun processVolcanoData(
+        curtainData: AppData,
+        curtainSettings: CurtainSettings
+    ): VolcanoProcessResult = withContext(Dispatchers.Default) {
+        if (curtainData.differentialForm == null) {
+            throw IllegalStateException("Differential form is not set in CurtainData")
+        }
 
         // Get differential form settings
         val diffForm = curtainData.differentialForm
@@ -97,16 +107,277 @@ class VolcanoPlotTabFragment : Fragment() {
         val geneColumn = diffForm.geneNames
         val comparisonColumn = diffForm.comparison
 
-
         if (fcColumn.isEmpty() || sigColumn.isEmpty()) {
-            Log.e("VolcanoPlot", "Missing fold change or significance columns")
-            binding.errorText.visibility = View.VISIBLE
-            binding.errorText.text = "Missing fold change or significance columns"
-            showLoading(false)
-            return
+            throw IllegalArgumentException("Missing fold change or significance columns")
         }
 
+        // Convert differential data to JSON for plotting
+        val jsonData = JSONArray()
+
+        var minFC = Double.MAX_VALUE
+        var maxFC = -Double.MAX_VALUE
+        var maxLogP = 0.0
+
+        // Get color maps and track used colors
+        val colorMap = curtainSettings.colorMap.toMutableMap()
+        val specialColorMap = mutableMapOf<String, String>()
+
+        // Extract conditions from sampleMap
+        val conditions = mutableListOf<String>()
+        curtainSettings.sampleMap.forEach { (_, sampleInfo) ->
+            val condition = sampleInfo["condition"]
+            if (condition != null && !conditions.contains(condition)) {
+                conditions.add(condition)
+            }
+        }
+
+        // Color assignment logic from web app
+        val currentColors = mutableListOf<String>()
+        val defaultColorList = curtainSettings.defaultColorList
+
+        // Collect currently used colors
+        if (colorMap.isNotEmpty()) {
+            colorMap.forEach { (s, color) ->
+                if (!conditions.contains(s)) {
+                    if (defaultColorList.contains(color)) {
+                        currentColors.add(color)
+                    }
+                }
+            }
+        }
+
+        // Set current position for color assignment
+        var currentPosition = 0
+        if (currentColors.size != defaultColorList.size) {
+            if (currentColors.size >= defaultColorList.size) {
+                currentPosition = 0
+            } else {
+                currentPosition = currentColors.size
+            }
+        }
+
+        // Get selection operation names
+        val selectOperationNames = mutableSetOf<String>()
+        curtainData.selectedMap.forEach { (_, selections) ->
+            @Suppress("UNCHECKED_CAST")
+            val selectionMap = selections as? Map<String, Boolean>
+            selectionMap?.forEach { (selectionName, isSelected) ->
+                if (isSelected) {
+                    selectOperationNames.add(selectionName)
+                }
+            }
+        }
+
+        // Assign colors using the logic from web app
+        var breakColor = false
+        var repeat = false
+
+        for (s in selectOperationNames) {
+            if (!colorMap.containsKey(s)) {
+                while (true) {
+                    if (breakColor) {
+                        colorMap[s] = defaultColorList[currentPosition]
+                        break
+                    }
+
+                    if (currentColors.contains(defaultColorList[currentPosition])) {
+                        currentPosition++
+                        if (repeat) {
+                            colorMap[s] = defaultColorList[currentPosition]
+                            currentPosition = 0
+                            breakColor = true
+                            break
+                        }
+                    } else if (currentPosition >= defaultColorList.size) {
+                        currentPosition = 0
+                        colorMap[s] = defaultColorList[currentPosition]
+                        repeat = true
+                        break
+                    } else if (currentPosition != defaultColorList.size) {
+                        colorMap[s] = defaultColorList[currentPosition]
+                        break
+                    } else {
+                        breakColor = true
+                        currentPosition = 0
+                    }
+                }
+
+                currentPosition++
+                if (currentPosition == defaultColorList.size) {
+                    currentPosition = 0
+                }
+            }
+        }
+
+        val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+
+        if (processedData == null) {
+            throw IllegalStateException("No differential data available")
+        }
+
+        for (row in processedData) {
+            val comparison = if (comparisonColumn.isNotEmpty()) row[comparisonColumn]?.toString() ?: "" else ""
+            val id = row[idColumn]?.toString() ?: ""
+            val gene = if (geneColumn.isNotEmpty()) row[geneColumn]?.toString() ?: id else id
+
+            val dataPoint = JSONObject()
+
+            val fcValue = when (val fc = row[fcColumn]) {
+                is Number -> {
+                    val doubleValue = fc.toDouble()
+                    if (doubleValue.isNaN()) 0.0 else doubleValue
+                }
+                is String -> fc.toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
+
+            val sigValue = when (val sig = row[sigColumn]) {
+                is Number -> {
+                    val doubleValue = sig.toDouble()
+                    if (doubleValue.isNaN()) 0.0 else doubleValue
+                }
+                is String -> sig.toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
+
+            minFC = minOf(minFC, fcValue)
+            maxFC = maxOf(maxFC, fcValue)
+            maxLogP = maxOf(maxLogP, sigValue)
+
+            val selections = mutableListOf<String>()
+            val selectionColors = mutableListOf<String>()
+
+            @Suppress("UNCHECKED_CAST")
+            val selectionForId: Map<String, Boolean>? = curtainData.selectedMap[id] as? Map<String, Boolean>
+
+            if (selectionForId != null) {
+                // Add each selection this ID belongs to
+                for ((selectionName, selected) in selectionForId) {
+                    if (selected && colorMap.containsKey(selectionName)) {
+                        selections.add(selectionName)
+                        selectionColors.add(colorMap[selectionName]!!)
+                    }
+                }
+            }
+
+            // If not part of any selection, create significance groups or add to background
+            if (selections.isEmpty()) {
+                if (curtainSettings.backGroundColorGrey) {
+                    // Add to Background category
+                    selections.add("Background")
+                    selectionColors.add("#a4a2a2")  // Gray with opacity
+                } else {
+                    // Use significance grouping system
+                    val (groupText, position) = getSignificantGroup(fcValue, sigValue, curtainSettings)
+                    val group = "$groupText ($comparison)"
+
+                    // Modified color assignment for significance groups to match JavaScript implementation
+                    if (!colorMap.containsKey(group)) {
+                        if (!specialColorMap.containsKey(position)) {
+                            // Assign a new color from default list
+                            if (currentPosition < defaultColorList.size) {
+                                // Create a copy equivalent to slice() in JS
+                                val colorToUse = defaultColorList[currentPosition]
+                                specialColorMap[position] = colorToUse
+                                colorMap[group] = colorToUse
+                            } else {
+                                currentPosition = 0
+                                val colorToUse = defaultColorList[currentPosition]
+                                specialColorMap[position] = colorToUse
+                                colorMap[group] = colorToUse
+                            }
+
+                            currentPosition++
+                            if (currentPosition == defaultColorList.size) {
+                                currentPosition = 0
+                            }
+                        } else {
+                            // Reuse color for same significance pattern
+                            colorMap[group] = specialColorMap[position]!!
+                        }
+                    } else {
+                        specialColorMap[position] = colorMap[group]!!
+                    }
+
+                    selections.add(group)
+                    selectionColors.add(colorMap[group]!!)
+                }
+            }
+
+            dataPoint.put("x", fcValue)
+            dataPoint.put("y", sigValue)
+            dataPoint.put("id", id)
+            dataPoint.put("gene", gene)
+            dataPoint.put("comparison", comparison)
+            dataPoint.put("selections", JSONArray(selections))
+            dataPoint.put("colors", JSONArray(selectionColors))
+
+            val pointColor = if (selectionColors.isNotEmpty()) selectionColors[0] else "#808080"
+            dataPoint.put("color", pointColor)
+            jsonData.put(dataPoint)
+        }
+
+        // Create updated volcano axis
+        val volcanoAxis = curtainSettings.volcanoAxis
+        var updatedVolcanoAxis = VolcanoAxis(
+            minX = volcanoAxis.minX ?: (minFC - 1.0),
+            maxX = volcanoAxis.maxX ?: (maxFC + 1.0),
+            minY = volcanoAxis.minY ?: 0.0,
+            maxY = volcanoAxis.maxY ?: (maxLogP + 1.0),
+            x = volcanoAxis.x,
+            y = volcanoAxis.y,
+            dtickX = volcanoAxis.dtickX,
+            dtickY = volcanoAxis.dtickY,
+            ticklenX = volcanoAxis.ticklenX,
+            ticklenY = volcanoAxis.ticklenY
+        )
+        if (updatedVolcanoAxis.x == "") {
+            updatedVolcanoAxis = updatedVolcanoAxis.copy(x = "Fold Change")
+        }
+        if (updatedVolcanoAxis.y == "") {
+            updatedVolcanoAxis = updatedVolcanoAxis.copy(y = "-log10(p-value)")
+        }
+
+        // Return the processed result
+        VolcanoProcessResult(
+            jsonData = jsonData.toString(),
+            colorMap = colorMap,
+            updatedVolcanoAxis = updatedVolcanoAxis
+        )
+    }
+
+    private data class VolcanoProcessResult(
+        val jsonData: String,
+        val colorMap: Map<String, String>,
+        val updatedVolcanoAxis: VolcanoAxis
+    )
+
+
+    private fun loadVolcanoPlot() {
+        Log.d("VolcanoPlot", "Loading volcano plot")
+        val curtainData = viewModel.curtainData.value ?: return
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+
+        // Show loading initially
+        showLoading(true)
+
         try {
+            // Get differential form settings
+            val diffForm = curtainData.differentialForm
+            val fcColumn = diffForm.foldChange
+            val sigColumn = diffForm.significant
+            val idColumn = diffForm.primaryIDs
+            val geneColumn = diffForm.geneNames
+            val comparisonColumn = diffForm.comparison
+
+            if (fcColumn.isEmpty() || sigColumn.isEmpty()) {
+                Log.e("VolcanoPlot", "Missing fold change or significance columns")
+                binding.errorText.visibility = View.VISIBLE
+                binding.errorText.text = "Missing fold change or significance columns"
+                showLoading(false)
+                return
+            }
+
             // Convert differential data to JSON for plotting
             val jsonData = JSONArray()
 
@@ -114,9 +385,10 @@ class VolcanoPlotTabFragment : Fragment() {
             var maxFC = -Double.MAX_VALUE
             var maxLogP = 0.0
 
-            val selectedData = curtainData.selected ?: mapOf()
-            var colorMap = curtainSettings.colorMap.toMutableMap()
-
+            // Get color maps and track used colors
+            val colorMap = curtainSettings.colorMap.toMutableMap()
+            val specialColorMap = mutableMapOf<String, String>()
+            // Extract conditions from sampleMap
             val conditions = mutableListOf<String>()
             curtainSettings.sampleMap.forEach { (_, sampleInfo) ->
                 val condition = sampleInfo["condition"]
@@ -128,7 +400,6 @@ class VolcanoPlotTabFragment : Fragment() {
             // Color assignment logic from web app
             val currentColors = mutableListOf<String>()
             val defaultColorList = curtainSettings.defaultColorList
-
             // Collect currently used colors
             if (colorMap.isNotEmpty()) {
                 colorMap.forEach { (s, color) ->
@@ -138,8 +409,6 @@ class VolcanoPlotTabFragment : Fragment() {
                         }
                     }
                 }
-            } else {
-                colorMap = mutableMapOf()
             }
 
             // Set current position for color assignment
@@ -164,6 +433,7 @@ class VolcanoPlotTabFragment : Fragment() {
                 }
             }
 
+
             // Assign colors using the logic from web app
             var breakColor = false
             var repeat = false
@@ -180,6 +450,8 @@ class VolcanoPlotTabFragment : Fragment() {
                             currentPosition++
                             if (repeat) {
                                 colorMap[s] = defaultColorList[currentPosition]
+                                currentPosition = 0
+                                breakColor = true
                                 break
                             }
                         } else if (currentPosition >= defaultColorList.size) {
@@ -187,7 +459,7 @@ class VolcanoPlotTabFragment : Fragment() {
                             colorMap[s] = defaultColorList[currentPosition]
                             repeat = true
                             break
-                        } else if (currentPosition < defaultColorList.size) {
+                        } else if (currentPosition != defaultColorList.size) {
                             colorMap[s] = defaultColorList[currentPosition]
                             break
                         } else {
@@ -202,11 +474,6 @@ class VolcanoPlotTabFragment : Fragment() {
                     }
                 }
             }
-
-            // Update settings with the new color map
-            val updatedSettings = curtainSettings.copy(colorMap = colorMap)
-            viewModel.updateCurtainSettings(updatedSettings)
-            // Use processedDifferentialData if available
             val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
 
             if (processedData != null) {
@@ -226,12 +493,12 @@ class VolcanoPlotTabFragment : Fragment() {
                         else -> 0.0
                     }
 
-                    val sigValue = when (val fc = row[sigColumn]) {
+                    val sigValue = when (val sig = row[sigColumn]) {
                         is Number -> {
-                            val doubleValue = fc.toDouble()
+                            val doubleValue = sig.toDouble()
                             if (doubleValue.isNaN()) 0.0 else doubleValue
                         }
-                        is String -> fc.toDoubleOrNull() ?: 0.0
+                        is String -> sig.toDoubleOrNull() ?: 0.0
                         else -> 0.0
                     }
 
@@ -242,60 +509,83 @@ class VolcanoPlotTabFragment : Fragment() {
                     val selections = mutableListOf<String>()
                     val selectionColors = mutableListOf<String>()
 
-
                     @Suppress("UNCHECKED_CAST")
                     val selectionForId: Map<String, Boolean>? = curtainData.selectedMap[id] as? Map<String, Boolean>
 
                     if (selectionForId != null) {
                         // Add each selection this ID belongs to
                         for ((selectionName, selected) in selectionForId) {
-                            if (selected) {
-                                // Check if the selection is comparison-specific
-                                val matchResult = Regex("\\(([^)]*)\\)[^(]*$").find(selectionName)
-                                if (matchResult != null) {
-                                    val matchedComparison = matchResult.groupValues[1]
-                                    // Only include if the comparison matches
-                                    if (matchedComparison == comparison) {
-                                        Log.d("VolcanoPlot", "Adding selection: $selectionName for ID: $id")
-                                        Log.d("VolcanoPlot", "Color for selection: ${colorMap[selectionName]}")
-                                        selections.add(selectionName)
-                                        val color = colorMap[selectionName] ?: "#808080"
-                                        selectionColors.add(color)
-                                    }
-                                } else {
-                                    // Not comparison-specific, include it
-                                    selections.add(selectionName)
-                                    val color = colorMap[selectionName] ?: "#808080"
-                                    selectionColors.add(color)
-                                }
+                            if (selected && colorMap.containsKey(selectionName)) {
+                                selections.add(selectionName)
+                                selectionColors.add(colorMap[selectionName]!!)
                             }
                         }
-                    }  else if (curtainSettings.backGroundColorGrey) {
-                        selections.add("Background")
-                        selectionColors.add("#a4a2a2")
                     }
 
-                    // Get ID and gene name for labels
+                    // If not part of any selection, create significance groups or add to background
+                    if (selections.isEmpty()) {
+                        if (curtainSettings.backGroundColorGrey) {
+                            // Add to Background category
+                            selections.add("Background")
+                            selectionColors.add("#a4a2a2")  // Gray with opacity
+                        } else {
+                            // Use significance grouping system
+                            val (groupText, position) = getSignificantGroup(fcValue, sigValue, curtainSettings)
+                            val group = "$groupText ($comparison)"
+
+                            // Modified color assignment for significance groups to match JavaScript implementation
+                            if (!colorMap.containsKey(group)) {
+                                if (!specialColorMap.containsKey(position)) {
+                                    // Assign a new color from default list
+                                    if (currentPosition < defaultColorList.size) {
+                                        // Create a copy equivalent to slice() in JS
+                                        val colorToUse = defaultColorList[currentPosition]
+                                        specialColorMap[position] = colorToUse
+                                        colorMap[group] = colorToUse
+                                    } else {
+                                        currentPosition = 0
+                                        val colorToUse = defaultColorList[currentPosition]
+                                        specialColorMap[position] = colorToUse
+                                        colorMap[group] = colorToUse
+                                    }
+
+                                    currentPosition++
+                                    if (currentPosition == defaultColorList.size) {
+                                        currentPosition = 0
+                                    }
+                                } else {
+                                    // Reuse color for same significance pattern
+                                    colorMap[group] = specialColorMap[position]!!
+                                }
+                            } else {
+                                specialColorMap[position] = colorMap[group]!!
+                            }
+
+                            selections.add(group)
+                            selectionColors.add(colorMap[group]!!)
+                        }
+                    }
 
                     dataPoint.put("x", fcValue)
                     dataPoint.put("y", sigValue)
                     dataPoint.put("id", id)
                     dataPoint.put("gene", gene)
+                    dataPoint.put("comparison", comparison)
                     dataPoint.put("selections", JSONArray(selections))
                     dataPoint.put("colors", JSONArray(selectionColors))
 
-
                     val pointColor = if (selectionColors.isNotEmpty()) selectionColors[0] else "#808080"
                     dataPoint.put("color", pointColor)
-
                     jsonData.put(dataPoint)
                 }
 
+                // Update settings with the new color map
+                val updatedSettings = curtainSettings.copy(colorMap = colorMap)
+                Log.d("VolcanoPlot", "Updated color map: $colorMap")
+                // Update volcano axis settings
                 val settings = viewModel.curtainSettings.value
                 if (settings != null) {
                     val volcanoAxis = settings.volcanoAxis
-
-                    // Create a new VolcanoAxis with automatically calculated boundaries
                     val updatedVolcanoAxis = VolcanoAxis(
                         minX = volcanoAxis.minX ?: (minFC - 1.0),
                         maxX = volcanoAxis.maxX ?: (maxFC + 1.0),
@@ -308,21 +598,11 @@ class VolcanoPlotTabFragment : Fragment() {
                         ticklenX = volcanoAxis.ticklenX,
                         ticklenY = volcanoAxis.ticklenY
                     )
-
-                    // For debugging
-                    Log.d("VolcanoPlot", "Original axis: $volcanoAxis")
-                    Log.d("VolcanoPlot", "Updated axis: $updatedVolcanoAxis")
-
-                    // Create a temporary settings object with the updated axis
-                    val updatedSettings = settings.copy(volcanoAxis = updatedVolcanoAxis)
-                    viewModel.updateCurtainSettings(updatedSettings)
+                    val updatedSettingsWithAxis = updatedSettings.copy(volcanoAxis = updatedVolcanoAxis)
+                    viewModel.updateCurtainSettings(updatedSettingsWithAxis)
                 }
 
-                val html = createVolcanoPlotHtml(
-                    jsonData.toString()
-                )
-
-
+                val html = createVolcanoPlotHtml(jsonData.toString())
                 binding.webView.loadDataWithBaseURL(
                     "file:///android_asset/",
                     html,
@@ -330,6 +610,7 @@ class VolcanoPlotTabFragment : Fragment() {
                     "utf-8",
                     null
                 )
+                showLoading(false)
             } else {
                 binding.errorText.visibility = View.VISIBLE
                 binding.errorText.text = "No differential data available"
@@ -343,55 +624,81 @@ class VolcanoPlotTabFragment : Fragment() {
         }
     }
 
+    private fun loadVolcanoPlotDefer() {
+        Log.d("VolcanoPlot", "Loading volcano plot")
+        val curtainData = viewModel.curtainData.value ?: return
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+
+        // Show loading initially
+        showLoading(true)
+
+        // Launch a coroutine in the IO dispatcher for background processing
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // Process data in background thread
+                val result = processVolcanoData(curtainData, curtainSettings)
+
+                // Switch back to main thread to update UI
+                withContext(Dispatchers.Main) {
+                    val updatedSettings = curtainSettings.copy(
+                        colorMap = result.colorMap,
+                        volcanoAxis = result.updatedVolcanoAxis
+                    )
+                    viewModel.updateCurtainSettings(updatedSettings)
+                    val html = createVolcanoPlotHtml(result.jsonData)
+                    binding.webView.loadDataWithBaseURL(
+                        "file:///android_asset/",
+                        html,
+                        "text/html",
+                        "utf-8",
+                        null
+                    )
+
+                    // Update settings with the new color map
+
+                    Log.d("VolcanoPlot", "Updated color map: ${result.updatedVolcanoAxis}")
+
+                    showLoading(false)
+                }
+            } catch (e: Exception) {
+                // Handle errors on the main thread
+                withContext(Dispatchers.Main) {
+                    Log.e("VolcanoPlot", "Error loading volcano plot: ${e.message}", e)
+                    binding.errorText.visibility = View.VISIBLE
+                    binding.errorText.text = "Error loading plot: ${e.message}"
+                    showLoading(false)
+                }
+            }
+        }
+    }
+
+    private fun getSignificantGroup(fcValue: Double, sigValue: Double, settings: CurtainSettings): Pair<String, String> {
+        val ylog = -Math.log10(settings.pCutoff)
+        val groups = mutableListOf<String>()
+        var position = ""
+
+        if (ylog > sigValue) {
+            groups.add("P-value > ${settings.pCutoff}")
+            position = "P-value > "
+        } else {
+            groups.add("P-value <= ${settings.pCutoff}")
+            position = "P-value <= "
+        }
+
+        if (Math.abs(fcValue) > settings.log2FCCutoff) {
+            groups.add("FC > ${settings.log2FCCutoff}")
+            position += "FC > "
+        } else {
+            groups.add("FC <= ${settings.log2FCCutoff}")
+            position += "FC <= "
+        }
+
+        return Pair(groups.joinToString(";"), position)
+    }
+
     private fun createVolcanoPlotHtml(jsonData: String): String {
         // Get settings from CurtainDataService
         val curtainSettings = viewModel.curtainSettings.value ?: throw IllegalStateException("Curtain settings not available")
-
-        // Get axis titles
-        val xAxisTitle = curtainSettings.volcanoAxis.x
-        val yAxisTitle = curtainSettings.volcanoAxis.y
-
-        // Get grid settings
-        val showGridX = curtainSettings.volcanoPlotGrid["x"] as? Boolean ?: false
-        val showGridY = curtainSettings.volcanoPlotGrid["y"] as? Boolean ?: false
-
-        // Get axis range settings
-        val xAxisRange = if (curtainSettings.volcanoAxis.minX != null || curtainSettings.volcanoAxis.maxX != null) {
-            "[${curtainSettings.volcanoAxis.minX ?: "null"}, ${curtainSettings.volcanoAxis.maxX ?: "null"}]"
-        } else {
-            "null"
-        }
-
-        val yAxisRange = if (curtainSettings.volcanoAxis.minY != null || curtainSettings.volcanoAxis.maxY != null) {
-            "[${curtainSettings.volcanoAxis.minY ?: "null"}, ${curtainSettings.volcanoAxis.maxY ?: "null"}]"
-        } else {
-            "null"
-        }
-
-        // Get tick settings
-        val dtickX = curtainSettings.volcanoAxis.dtickX?.toString() ?: "null"
-        val dtickY = curtainSettings.volcanoAxis.dtickY?.toString() ?: "null"
-        val ticklenX = curtainSettings.volcanoAxis.ticklenX
-        val ticklenY = curtainSettings.volcanoAxis.ticklenY
-
-        // Background color setting
-        val backgroundColor = if (curtainSettings.backGroundColorGrey) {
-            "'#f0f0f0'"
-        } else {
-            "'white'"
-        }
-
-        // Margin settings
-        val marginSettings = if (curtainSettings.volcanoPlotDimension?.margin?.left != null) {
-            """margin: {
-                l: ${curtainSettings.volcanoPlotDimension.margin.left},
-                r: ${curtainSettings.volcanoPlotDimension.margin.right},
-                b: ${curtainSettings.volcanoPlotDimension.margin.bottom},
-                t: ${curtainSettings.volcanoPlotDimension.margin.top}
-            }"""
-        } else {
-            "margin: {l: 50, r: 50, b: 100, t: 50}"  // Increased bottom margin from 50 to 100
-        }
 
         return """
     <!DOCTYPE html>
@@ -544,7 +851,7 @@ class VolcanoPlotTabFragment : Fragment() {
                 x1: ${-curtainSettings.log2FCCutoff},
                 y1: yMax,
                 line: {
-                    color: 'grey',
+                    color: 'rgb(21,4,4)',
                     width: 1,
                     dash: 'dash'
                 }
@@ -558,7 +865,7 @@ class VolcanoPlotTabFragment : Fragment() {
                 x1: ${curtainSettings.log2FCCutoff},
                 y1: yMax,
                 line: {
-                    color: 'grey',
+                    color: 'rgb(21,4,4)',
                     width: 1,
                     dash: 'dash'
                 }
@@ -576,7 +883,7 @@ class VolcanoPlotTabFragment : Fragment() {
                 x1: x1,
                 y1: ${-Math.log10(curtainSettings.pCutoff)},
                 line: {
-                    color: 'grey',
+                    color: 'rgb(21,4,4)',
                     width: 1,
                     dash: 'dash'
                 }
