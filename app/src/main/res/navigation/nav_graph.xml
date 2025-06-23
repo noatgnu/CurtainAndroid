@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/curtainListFragment">
+
+    <fragment
+        android:id="@+id/curtainListFragment"
+        android:name="info.proteo.curtain.CurtainListFragment"
+        android:label="Curtain List"
+        tools:layout="@layout/fragment_curtain_list">
+        <action
+            android:id="@+id/action_curtainListFragment_to_dataFilterListActivity"
+            app:destination="@id/dataFilterListActivity" />
+        <action
+            android:id="@+id/action_curtainListFragment_to_curtainDetailsFragment"
+            app:destination="@id/curtainDetailsFragment"
+            app:enterAnim="@anim/nav_default_enter_anim"
+            app:exitAnim="@anim/nav_default_exit_anim"
+            app:popEnterAnim="@anim/nav_default_pop_enter_anim"
+            app:popExitAnim="@anim/nav_default_pop_exit_anim" />
+    </fragment>
+
+    <activity
+        android:id="@+id/dataFilterListActivity"
+        android:name="info.proteo.curtain.DataFilterListActivity"
+        android:label="Data Filter Lists"
+        tools:layout="@layout/activity_data_filter_list" />
+
+    <fragment
+        android:id="@+id/curtainDetailsFragment"
+        android:name="info.proteo.curtain.ui.CurtainDetailsFragment"
+        android:label="Curtain Details"
+        tools:layout="@layout/fragment_curtain_details">
+        <argument
+            android:name="curtainId"
+            app:argType="string"
+            android:defaultValue="" />
+        <action
+            android:id="@+id/action_curtainDetailsFragment_to_curtainListFragment"
+            app:destination="@id/curtainListFragment"
+            app:popUpTo="@id/curtainListFragment"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/volcanoPlotFragment"
+        android:name="info.proteo.curtain.ui.VolcanoPlotFragment"
+        android:label="Volcano Plot"
+        tools:layout="@layout/fragment_volcano_plot">
+        <argument
+            android:name="curtainId"
+            app:argType="string" />
+    </fragment>
+
+    <action
+        android:id="@+id/action_to_curtain_details_fragment"
+        app:destination="@id/curtainDetailsFragment"
+        app:enterAnim="@anim/nav_default_enter_anim"
+        app:exitAnim="@anim/nav_default_exit_anim" />
+
+</navigation>
