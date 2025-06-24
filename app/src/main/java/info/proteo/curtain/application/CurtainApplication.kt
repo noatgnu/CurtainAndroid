@@ -1,7 +1,9 @@
-package info.proteo.curtain
+package info.proteo.curtain.application
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
+import info.proteo.curtain.AppContext
+import info.proteo.curtain.CurtainDataService
 
 @HiltAndroidApp
 class CurtainApplication : Application() {
@@ -11,6 +13,6 @@ class CurtainApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         // Initialize AppContext with the application instance
-        AppContext.initialize(this)
+        AppContext.Companion.initialize(this)
     }
 }

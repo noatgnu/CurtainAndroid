@@ -1,9 +1,11 @@
-package info.proteo.curtain.ui
+package info.proteo.curtain.presentation.adapters
 
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import info.proteo.curtain.presentation.fragments.curtain.CurtainDetailsTabFragment
+import info.proteo.curtain.presentation.fragments.curtain.VolcanoPlotTabFragment
 
 class CurtainDetailsPagerAdapter(
     fragmentManager: FragmentManager,

@@ -1,4 +1,4 @@
-package info.proteo.curtain.ui
+package info.proteo.curtain.presentation.viewmodels
 
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle

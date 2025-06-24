@@ -1,5 +1,7 @@
 package info.proteo.curtain
 
+import info.proteo.curtain.data.local.database.entities.CurtainEntity
+import info.proteo.curtain.data.local.database.entities.CurtainSiteSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext

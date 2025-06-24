@@ -1,4 +1,4 @@
-package info.proteo.curtain.ui
+package info.proteo.curtain.presentation.fragments.curtain
 
 import android.os.Bundle
 import android.util.Log
@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import info.proteo.curtain.databinding.FragmentCurtainDetailsTabBinding
+import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import kotlinx.coroutines.launch
 
 class CurtainDetailsTabFragment : Fragment() {

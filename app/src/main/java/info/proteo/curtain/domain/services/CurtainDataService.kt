@@ -6,6 +6,7 @@ import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import info.proteo.curtain.utils.NavigationUtil
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -321,7 +322,7 @@ class CurtainDataService {
     fun performNavigation(destination: NavigationDestination) {
         when (destination) {
             NavigationDestination.CURTAIN_DETAILS -> {
-                info.proteo.curtain.util.NavigationUtil.navigateToCurtainDetails(currentActivity)
+                NavigationUtil.navigateToCurtainDetails(currentActivity)
             }
         }
     }

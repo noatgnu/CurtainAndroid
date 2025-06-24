@@ -1,5 +1,6 @@
 package info.proteo.curtain
 
+import info.proteo.curtain.data.local.database.entities.CurtainSiteSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

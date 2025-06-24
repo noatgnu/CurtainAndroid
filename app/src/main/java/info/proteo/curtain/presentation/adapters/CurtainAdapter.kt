@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import info.proteo.curtain.data.local.database.entities.CurtainEntity
 import java.io.File
 import java.text.DecimalFormat
 

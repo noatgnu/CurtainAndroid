@@ -6,6 +6,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import info.proteo.curtain.data.local.database.entities.CurtainEntity
+import info.proteo.curtain.data.local.database.entities.CurtainSiteSettings
 import kotlinx.coroutines.flow.Flow
 
 @Dao

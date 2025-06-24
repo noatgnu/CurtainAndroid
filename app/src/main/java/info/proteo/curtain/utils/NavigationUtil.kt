@@ -1,4 +1,4 @@
-package info.proteo.curtain.util
+package info.proteo.curtain.utils
 
 import android.app.Activity
 import androidx.fragment.app.FragmentActivity

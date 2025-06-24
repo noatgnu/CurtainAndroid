@@ -30,7 +30,7 @@
 
     <fragment
         android:id="@+id/curtainDetailsFragment"
-        android:name="info.proteo.curtain.ui.CurtainDetailsFragment"
+        android:name="info.proteo.curtain.presentation.fragments.curtain.CurtainDetailsFragment"
         android:label="Curtain Details"
         tools:layout="@layout/fragment_curtain_details">
         <argument
@@ -46,7 +46,7 @@
 
     <fragment
         android:id="@+id/volcanoPlotFragment"
-        android:name="info.proteo.curtain.ui.VolcanoPlotFragment"
+        android:name="info.proteo.curtain.presentation.fragments.curtain.VolcanoPlotTabFragment"
         android:label="Volcano Plot"
         tools:layout="@layout/fragment_volcano_plot">
         <argument

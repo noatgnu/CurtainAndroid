@@ -1,4 +1,4 @@
-package info.proteo.curtain
+package info.proteo.curtain.data.local.database.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -29,22 +29,4 @@ data class CurtainEntity(
     val curtainType: String = "TP",
     @ColumnInfo(name = "source_hostname")
     val sourceHostname: String
-)
-
-@Entity(tableName = "curtain_site_settings")
-data class CurtainSiteSettings(
-    @PrimaryKey
-    val hostname: String,
-
-    @ColumnInfo(name = "last_sync")
-    val lastSync: Long = 0,
-
-    @ColumnInfo(name = "active")
-    val active: Boolean = true,
-
-    @ColumnInfo(name = "api_key")
-    val apiKey: String? = null,
-
-    @ColumnInfo(name = "notes")
-    val notes: String? = null
 )

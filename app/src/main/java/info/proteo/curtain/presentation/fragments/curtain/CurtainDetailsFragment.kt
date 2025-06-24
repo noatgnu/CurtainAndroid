@@ -1,4 +1,4 @@
-package info.proteo.curtain.ui
+package info.proteo.curtain.presentation.fragments.curtain
 
 import android.os.Bundle
 import android.util.Log
@@ -17,6 +17,9 @@ import androidx.navigation.fragment.navArgs
 import com.google.android.material.tabs.TabLayoutMediator
 import dagger.hilt.android.AndroidEntryPoint
 import info.proteo.curtain.databinding.FragmentCurtainDetailsBinding
+import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
+import info.proteo.curtain.presentation.adapters.CurtainDetailsPagerAdapter
+import info.proteo.curtain.presentation.fragments.curtain.CurtainDetailsFragmentArgs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch

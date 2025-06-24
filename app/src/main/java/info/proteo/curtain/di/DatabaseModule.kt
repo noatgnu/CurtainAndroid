@@ -7,6 +7,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import info.proteo.curtain.data.local.database.AppDatabase
 import javax.inject.Singleton
 
 @Module
