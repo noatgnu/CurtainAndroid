@@ -3,7 +3,8 @@ package info.proteo.curtain
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -36,25 +37,43 @@ class CurtainAdapter(
         private val tvDescription: TextView = itemView.findViewById(R.id.tvDescription)
         private val tvType: TextView = itemView.findViewById(R.id.tvType)
         private val tvFileSize: TextView = itemView.findViewById(R.id.tvFileSize)
-        private val btnRedownload: ImageButton = itemView.findViewById(R.id.btnRedownload)
+        private val btnDownloadContainer: LinearLayout = itemView.findViewById(R.id.btnDownloadContainer)
+        private val btnActionIcon: ImageView = itemView.findViewById(R.id.btnActionIcon)
+        private val tvActionLabel: TextView = itemView.findViewById(R.id.tvActionLabel)
 
         fun bind(curtain: CurtainEntity) {
             tvLinkId.text = curtain.linkId
             tvDescription.text = curtain.description
             tvType.text = curtain.curtainType
 
-            // Display file size if file exists
-            curtain.file?.let { filePath ->
+            // Display file size and update button state based on file existence
+            val hasDownloadedFile = curtain.file?.let { filePath ->
                 val file = File(filePath)
                 if (file.exists()) {
                     val sizeString = formatFileSize(file.length())
                     tvFileSize.text = sizeString
                     tvFileSize.visibility = View.VISIBLE
+                    true
                 } else {
                     tvFileSize.visibility = View.GONE
+                    false
                 }
             } ?: run {
                 tvFileSize.visibility = View.GONE
+                false
+            }
+
+            // Update button appearance based on download state
+            if (hasDownloadedFile) {
+                // File exists - show resync option
+                btnActionIcon.setImageResource(R.drawable.ic_refresh)
+                tvActionLabel.text = "Resync"
+                btnDownloadContainer.contentDescription = "Resync data"
+            } else {
+                // No file - show download option
+                btnActionIcon.setImageResource(R.drawable.ic_download)
+                tvActionLabel.text = "Download"
+                btnDownloadContainer.contentDescription = "Download data"
             }
 
             // Set click listeners
@@ -62,7 +81,7 @@ class CurtainAdapter(
                 onItemClick(curtain)
             }
 
-            btnRedownload.setOnClickListener {
+            btnDownloadContainer.setOnClickListener {
                 onRedownloadClick(curtain)
             }
         }

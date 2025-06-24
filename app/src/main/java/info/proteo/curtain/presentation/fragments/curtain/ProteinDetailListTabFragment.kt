@@ -10,7 +10,6 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import info.proteo.curtain.AppData
 import info.proteo.curtain.CurtainSettings
@@ -19,7 +18,17 @@ import info.proteo.curtain.databinding.ItemProteinDetailBinding
 import info.proteo.curtain.databinding.ItemSampleDataBinding
 import info.proteo.curtain.databinding.ItemConditionDataBinding
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
+import info.proteo.curtain.utils.PlotlyChartGenerator
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.recyclerview.widget.LinearLayoutManager
+import android.webkit.WebView
+import android.webkit.WebSettings
+import androidx.appcompat.app.AlertDialog
+import android.widget.Button
+import android.widget.TextView
+import info.proteo.curtain.R
 import org.jetbrains.kotlinx.dataframe.api.getColumn
 
 class ProteinDetailListTabFragment : Fragment() {
@@ -28,6 +37,19 @@ class ProteinDetailListTabFragment : Fragment() {
 
     private val viewModel: CurtainDetailsViewModel by activityViewModels()
     private lateinit var proteinDetailAdapter: ProteinDetailAdapter
+    
+    // Pagination constants and state
+    companion object {
+        private const val PAGE_SIZE = 20
+        private const val INITIAL_PAGE_SIZE = 10
+    }
+    
+    private var currentPage = 0
+    private var totalProteins = 0
+    private var isLoading = false
+    private var hasMoreData = true
+    private var allSelectedProteins = listOf<String>()
+    private val loadedProteinDetails = mutableListOf<ProteinDetail>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -42,6 +64,7 @@ class ProteinDetailListTabFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         
         setupRecyclerView()
+        setupPaginationControls()
         
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -53,37 +76,179 @@ class ProteinDetailListTabFragment : Fragment() {
             }
         }
     }
-
-    private fun setupRecyclerView() {
-        proteinDetailAdapter = ProteinDetailAdapter()
-        binding.recyclerView.apply {
-            layoutManager = LinearLayoutManager(requireContext())
-            adapter = proteinDetailAdapter
+    
+    private fun setupPaginationControls() {
+        binding.loadMoreButton.setOnClickListener {
+            loadMoreProteins()
         }
     }
 
+    private fun setupRecyclerView() {
+        proteinDetailAdapter = ProteinDetailAdapter { viewModel.curtainSettings.value?.colorMap ?: mapOf() }
+        val layoutManager = LinearLayoutManager(requireContext())
+        
+        binding.recyclerView.apply {
+            this.layoutManager = layoutManager
+            adapter = proteinDetailAdapter
+            
+            // Add scroll listener for pagination
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    super.onScrolled(recyclerView, dx, dy)
+                    
+                    val visibleItemCount = layoutManager.childCount
+                    val totalItemCount = layoutManager.itemCount
+                    val pastVisibleItems = layoutManager.findFirstVisibleItemPosition()
+                    
+                    // Load more when user scrolls to near the end
+                    if (!isLoading && hasMoreData) {
+                        if (visibleItemCount + pastVisibleItems >= totalItemCount - 3) {
+                            loadMoreProteins()
+                        }
+                    }
+                }
+            })
+        }
+    }
+    
+    private fun updatePaginationInfo() {
+        val loadedCount = loadedProteinDetails.size
+        val totalCount = allSelectedProteins.size
+        
+        Log.d("ProteinDetailList", "Pagination: $loadedCount/$totalCount proteins loaded, hasMore: $hasMoreData")
+        
+        // Update pagination info text
+        binding.paginationInfo.apply {
+            text = "Showing $loadedCount of $totalCount proteins"
+            visibility = if (totalCount > 0) View.VISIBLE else View.GONE
+        }
+        
+        // Update load more button visibility
+        binding.loadMoreLayout.visibility = if (hasMoreData && totalCount > 0) View.VISIBLE else View.GONE
+        binding.loadMoreButton.text = if (hasMoreData) {
+            "Load More Proteins (${totalCount - loadedCount} remaining)"
+        } else {
+            "All proteins loaded"
+        }
+        binding.loadMoreButton.isEnabled = hasMoreData
+    }
+
     private fun loadProteinDetails() {
+        // Reset pagination state
+        currentPage = 0
+        hasMoreData = true
+        loadedProteinDetails.clear()
+        
+        loadInitialPage()
+    }
+    
+    private fun loadInitialPage() {
         val curtainData = viewModel.curtainData.value ?: return
         val curtainSettings = viewModel.curtainSettings.value ?: return
 
         showLoading(true)
+        isLoading = true
 
-        try {
-            // Check if there are any selected proteins
-            val selectedProteins = getSelectedProteins(curtainData)
-            
-            if (selectedProteins.isEmpty()) {
-                showNoSelection()
-                return
+        // Run the heavy processing in a background thread
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                // Background processing
+                val result = withContext(Dispatchers.IO) {
+                    // Update loading message
+                    withContext(Dispatchers.Main) {
+                        binding.loadingText.text = "Checking selected proteins..."
+                    }
+                    
+                    // Check if there are any selected proteins
+                    val selectedProteins = getSelectedProteins(curtainData)
+                    
+                    if (selectedProteins.isEmpty()) {
+                        return@withContext null // Signal no selection
+                    }
+                    
+                    // Store all selected proteins for pagination
+                    allSelectedProteins = selectedProteins
+                    totalProteins = selectedProteins.size
+                    
+                    // Update loading message
+                    withContext(Dispatchers.Main) {
+                        binding.loadingText.text = "Loading initial ${INITIAL_PAGE_SIZE} of ${totalProteins} proteins..."
+                    }
+
+                    // Process only the first page
+                    val pageProteins = selectedProteins.take(INITIAL_PAGE_SIZE)
+                    processProteinDetails(curtainData, curtainSettings, pageProteins)
+                }
+                
+                // Back on main thread for UI updates
+                if (result == null) {
+                    showNoSelection()
+                } else {
+                    loadedProteinDetails.addAll(result)
+                    proteinDetailAdapter.submitList(loadedProteinDetails.toList())
+                    proteinDetailAdapter.updateColorMap(viewModel.curtainSettings.value?.colorMap ?: mapOf())
+                    
+                    // Check if there's more data
+                    hasMoreData = allSelectedProteins.size > INITIAL_PAGE_SIZE
+                    updatePaginationInfo()
+                    
+                    showContent()
+                }
+                
+                isLoading = false
+            } catch (e: Exception) {
+                Log.e("ProteinDetailList", "Error loading protein details: ${e.message}", e)
+                showError("Error loading protein details: ${e.message}")
+                isLoading = false
             }
-
-            val proteinDetails = processProteinDetails(curtainData, curtainSettings, selectedProteins)
-            proteinDetailAdapter.submitList(proteinDetails)
-            
-            showContent()
-        } catch (e: Exception) {
-            Log.e("ProteinDetailList", "Error loading protein details: ${e.message}", e)
-            showError("Error loading protein details: ${e.message}")
+        }
+    }
+    
+    private fun loadMoreProteins() {
+        if (isLoading || !hasMoreData) return
+        
+        val curtainData = viewModel.curtainData.value ?: return
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        isLoading = true
+        currentPage++
+        
+        showLoadMoreProgress(true)
+        
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    
+                    val startIndex = INITIAL_PAGE_SIZE + (currentPage - 1) * PAGE_SIZE
+                    val endIndex = minOf(startIndex + PAGE_SIZE, allSelectedProteins.size)
+                    
+                    if (startIndex >= allSelectedProteins.size) {
+                        return@withContext emptyList<ProteinDetail>()
+                    }
+                    
+                    val pageProteins = allSelectedProteins.subList(startIndex, endIndex)
+                    
+                    processProteinDetails(curtainData, curtainSettings, pageProteins)
+                }
+                
+                if (result.isNotEmpty()) {
+                    loadedProteinDetails.addAll(result)
+                    proteinDetailAdapter.submitList(loadedProteinDetails.toList())
+                    proteinDetailAdapter.updateColorMap(viewModel.curtainSettings.value?.colorMap ?: mapOf())
+                }
+                
+                // Check if there's more data
+                hasMoreData = loadedProteinDetails.size < allSelectedProteins.size
+                updatePaginationInfo()
+                
+                showLoadMoreProgress(false)
+                isLoading = false
+                
+            } catch (e: Exception) {
+                Log.e("ProteinDetailList", "Error loading more proteins: ${e.message}", e)
+                showLoadMoreProgress(false)
+                isLoading = false
+            }
         }
     }
 
@@ -102,11 +267,11 @@ class ProteinDetailListTabFragment : Fragment() {
         return selectedProteins.distinct()
     }
 
-    private fun processProteinDetails(
+    private suspend fun processProteinDetails(
         curtainData: AppData,
         curtainSettings: CurtainSettings,
         selectedProteins: List<String>
-    ): List<ProteinDetail> {
+    ): List<ProteinDetail> = withContext(Dispatchers.IO) {
         val details = mutableListOf<ProteinDetail>()
         
         // Get raw data
@@ -116,9 +281,20 @@ class ProteinDetailListTabFragment : Fragment() {
         
         // Group samples by condition and order by conditionOrder
         val samplesByCondition = groupSamplesByConditionOrdered(sampleColumns, curtainSettings)
+        
+        Log.d("ProteinDetailList", "Processing ${selectedProteins.size} selected proteins...")
 
         // Process each selected protein
-        selectedProteins.forEach { proteinId ->
+        selectedProteins.forEachIndexed { index, proteinId ->
+            Log.d("ProteinDetailList", "Processing protein ${index + 1}/${selectedProteins.size}: $proteinId")
+            
+            // Update progress on main thread every 3 proteins or on last protein (more frequent for smaller batches)
+            if (index % 3 == 0 || index == selectedProteins.size - 1) {
+                withContext(Dispatchers.Main) {
+                    binding.loadingText.text = "Processing protein ${index + 1}/${selectedProteins.size}..."
+                }
+            }
+            
             // Find the row for this protein
             for (rowIndex in 0 until rawData.rowsCount()) {
                 curtainData.raw.df.getColumn(primaryIdColumn).get(rowIndex)?.let { rowId ->
@@ -151,26 +327,27 @@ class ProteinDetailListTabFragment : Fragment() {
                                 conditionDataList = conditionDataList
                             )
                         )
-                        return@forEach
+                        return@forEachIndexed
                     }
                 }
             }
         }
         
-        return details.sortedBy { it.proteinId }
+        Log.d("ProteinDetailList", "Finished processing. Found ${details.size} protein details.")
+        details.sortedBy { it.proteinId }
     }
 
-    private fun groupSamplesByConditionOrdered(
+    private suspend fun groupSamplesByConditionOrdered(
         sampleColumns: List<String>,
         curtainSettings: CurtainSettings
-    ): LinkedHashMap<String, List<String>> {
+    ): LinkedHashMap<String, List<String>> = withContext(Dispatchers.IO) {
         val samplesByCondition = mutableMapOf<String, MutableList<String>>()
         
         // Use the sample map from settings if available
         if (curtainSettings.sampleMap.isNotEmpty()) {
             curtainSettings.sampleMap.forEach { (sampleName, sampleInfo) ->
                 val condition = sampleInfo["condition"] ?: "Unknown"
-                if (curtainSettings.sampleVisible.get(sampleName) == true) {
+                if (curtainSettings.sampleVisible[sampleName] == true) {
                     samplesByCondition.getOrPut(condition) { mutableListOf() }.add(sampleName)
                 }
             }
@@ -203,14 +380,14 @@ class ProteinDetailListTabFragment : Fragment() {
             }
         }
         
-        return orderedResult
+        orderedResult
     }
 
     private fun showLoading(isLoading: Boolean) {
         binding.apply {
             progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
             loadingText.visibility = if (isLoading) View.VISIBLE else View.GONE
-            recyclerView.visibility = if (isLoading) View.GONE else View.VISIBLE
+            contentLayout.visibility = if (isLoading) View.GONE else View.VISIBLE
             errorText.visibility = View.GONE
             noSelectionText.visibility = View.GONE
         }
@@ -220,7 +397,7 @@ class ProteinDetailListTabFragment : Fragment() {
         binding.apply {
             progressBar.visibility = View.GONE
             loadingText.visibility = View.GONE
-            recyclerView.visibility = View.VISIBLE
+            contentLayout.visibility = View.VISIBLE
             errorText.visibility = View.GONE
             noSelectionText.visibility = View.GONE
         }
@@ -230,7 +407,7 @@ class ProteinDetailListTabFragment : Fragment() {
         binding.apply {
             progressBar.visibility = View.GONE
             loadingText.visibility = View.GONE
-            recyclerView.visibility = View.GONE
+            contentLayout.visibility = View.GONE
             errorText.visibility = View.VISIBLE
             errorText.text = message
             noSelectionText.visibility = View.GONE
@@ -241,9 +418,19 @@ class ProteinDetailListTabFragment : Fragment() {
         binding.apply {
             progressBar.visibility = View.GONE
             loadingText.visibility = View.GONE
-            recyclerView.visibility = View.GONE
+            contentLayout.visibility = View.GONE
             errorText.visibility = View.GONE
             noSelectionText.visibility = View.VISIBLE
+        }
+    }
+    
+    private fun showLoadMoreProgress(show: Boolean) {
+        binding.apply {
+            loadMoreProgress.visibility = if (show) View.VISIBLE else View.GONE
+            loadMoreButton.isEnabled = !show
+            if (show) {
+                loadMoreButton.text = "Loading..."
+            }
         }
     }
 
@@ -270,11 +457,17 @@ class ProteinDetailListTabFragment : Fragment() {
     )
 
     // Adapter classes
-    class ProteinDetailAdapter : RecyclerView.Adapter<ProteinDetailAdapter.ProteinDetailViewHolder>() {
+    class ProteinDetailAdapter(private val colorMapProvider: () -> Map<String, String>) : RecyclerView.Adapter<ProteinDetailAdapter.ProteinDetailViewHolder>() {
         private var proteinDetails = listOf<ProteinDetail>()
+        private var colorMap = mapOf<String, String>()
 
         fun submitList(details: List<ProteinDetail>) {
             proteinDetails = details
+            notifyDataSetChanged()
+        }
+        
+        fun updateColorMap(newColorMap: Map<String, String>) {
+            colorMap = newColorMap
             notifyDataSetChanged()
         }
 
@@ -286,7 +479,8 @@ class ProteinDetailListTabFragment : Fragment() {
         }
 
         override fun onBindViewHolder(holder: ProteinDetailViewHolder, position: Int) {
-            holder.bind(proteinDetails[position])
+            val currentColorMap = colorMapProvider()
+            holder.bind(proteinDetails[position], currentColorMap)
         }
 
         override fun getItemCount(): Int = proteinDetails.size
@@ -294,20 +488,96 @@ class ProteinDetailListTabFragment : Fragment() {
         class ProteinDetailViewHolder(private val binding: ItemProteinDetailBinding) : 
             RecyclerView.ViewHolder(binding.root) {
 
-            fun bind(proteinDetail: ProteinDetail) {
+            fun bind(proteinDetail: ProteinDetail, colorMap: Map<String, String>) {
                 binding.apply {
-                    // Update main protein info - no longer showing single condition
+                    // Update main protein info
                     conditionTitle.text = "${proteinDetail.geneName} (${proteinDetail.proteinId})"
                     proteinId.text = "Protein ID: ${proteinDetail.proteinId}"
                     geneName.text = "Gene Name: ${proteinDetail.geneName}"
 
-                    // Setup conditions RecyclerView to show all conditions for this protein
-                    val conditionAdapter = ConditionDataAdapter()
-                    sampleRecyclerView.apply {
-                        layoutManager = LinearLayoutManager(itemView.context)
-                        adapter = conditionAdapter
+                    // Setup chart WebView
+                    setupChartWebView(chartWebView, proteinDetail, colorMap)
+
+                    // Setup raw data button
+                    viewRawDataButton.setOnClickListener {
+                        showRawDataDialog(proteinDetail)
                     }
-                    conditionAdapter.submitList(proteinDetail.conditionDataList)
+                }
+            }
+            
+            private fun showRawDataDialog(proteinDetail: ProteinDetail) {
+                val dialogView = LayoutInflater.from(itemView.context)
+                    .inflate(R.layout.dialog_protein_raw_data, null)
+                
+                // Setup dialog views
+                val dialogTitle = dialogView.findViewById<TextView>(R.id.dialogTitle)
+                val proteinInfo = dialogView.findViewById<TextView>(R.id.proteinInfo)
+                val conditionsRecyclerView = dialogView.findViewById<RecyclerView>(R.id.conditionsRecyclerView)
+                val closeButton = dialogView.findViewById<Button>(R.id.closeButton)
+                
+                dialogTitle.text = "Raw Data Values"
+                proteinInfo.text = "${proteinDetail.geneName} (${proteinDetail.proteinId})"
+                
+                // Setup RecyclerView in dialog
+                val conditionAdapter = ConditionDataAdapter()
+                conditionsRecyclerView.apply {
+                    layoutManager = LinearLayoutManager(context)
+                    adapter = conditionAdapter
+                }
+                conditionAdapter.submitList(proteinDetail.conditionDataList)
+                
+                // Create and show dialog
+                val dialog = AlertDialog.Builder(itemView.context)
+                    .setView(dialogView)
+                    .create()
+                
+                closeButton.setOnClickListener {
+                    dialog.dismiss()
+                }
+                
+                dialog.show()
+                
+                // Set dialog size
+                dialog.window?.setLayout(
+                    (itemView.context.resources.displayMetrics.widthPixels * 0.9).toInt(),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            }
+            
+            private fun setupChartWebView(
+                webView: WebView,
+                proteinDetail: ProteinDetail,
+                colorMap: Map<String, String>
+            ) {
+                webView.apply {
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        allowFileAccess = true
+                        allowContentAccess = true
+                        cacheMode = WebSettings.LOAD_NO_CACHE
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+                        setSupportZoom(false)
+                        builtInZoomControls = false
+                        displayZoomControls = false
+                    }
+                    
+                    // Generate chart HTML
+                    try {
+                        val chartHtml = PlotlyChartGenerator.generateBarChartHtml(
+                            proteinId = proteinDetail.proteinId,
+                            geneName = proteinDetail.geneName,
+                            conditionDataList = proteinDetail.conditionDataList,
+                            colorMap = colorMap
+                        )
+                        
+                        loadDataWithBaseURL("file:///android_asset/", chartHtml, "text/html", "UTF-8", null)
+                    } catch (e: Exception) {
+                        // Fallback: show error message
+                        val errorHtml = "<html><body><div style='text-align:center; padding:20px; color:#666;'>Chart unavailable</div></body></html>"
+                        loadDataWithBaseURL("file:///android_asset/", errorHtml, "text/html", "UTF-8", null)
+                    }
                 }
             }
         }

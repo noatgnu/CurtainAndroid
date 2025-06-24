@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -11,6 +13,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import dagger.hilt.android.AndroidEntryPoint
@@ -44,6 +47,11 @@ class CurtainListFragment : Fragment() {
         val downloadProgressContainer = view.findViewById<View>(R.id.downloadProgressContainer)
         val downloadProgressBar = view.findViewById<ProgressBar>(R.id.downloadProgressBar)
         val downloadProgressText = view.findViewById<TextView>(R.id.tvDownloadProgress)
+        val contentContainer = view.findViewById<LinearLayout>(R.id.contentContainer)
+        val paginationInfo = view.findViewById<TextView>(R.id.paginationInfo)
+        val loadMoreLayout = view.findViewById<LinearLayout>(R.id.loadMoreLayout)
+        val loadMoreButton = view.findViewById<Button>(R.id.loadMoreButton)
+        val loadMoreProgress = view.findViewById<ProgressBar>(R.id.loadMoreProgress)
 
         // Initialize the download progress views as invisible
         downloadProgressContainer?.visibility = View.GONE
@@ -101,7 +109,35 @@ class CurtainListFragment : Fragment() {
                 }
             }
         )
-        recyclerView.adapter = adapter
+        
+        val layoutManager = LinearLayoutManager(requireContext())
+        recyclerView.apply {
+            this.layoutManager = layoutManager
+            adapter = this@CurtainListFragment.adapter
+            
+            // Add scroll listener for pagination
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    super.onScrolled(recyclerView, dx, dy)
+                    
+                    val visibleItemCount = layoutManager.childCount
+                    val totalItemCount = layoutManager.itemCount
+                    val pastVisibleItems = layoutManager.findFirstVisibleItemPosition()
+                    
+                    // Load more when user scrolls to near the end
+                    if (viewModel.hasMoreCurtains() && !viewModel.isLoadingMore.value) {
+                        if (visibleItemCount + pastVisibleItems >= totalItemCount - 2) {
+                            viewModel.loadMoreCurtains()
+                        }
+                    }
+                }
+            })
+        }
+        
+        // Set up load more button
+        loadMoreButton?.setOnClickListener {
+            viewModel.loadMoreCurtains()
+        }
 
         // Set up FAB click listener
         view.findViewById<FloatingActionButton>(R.id.fabAddCurtain).setOnClickListener {
@@ -120,11 +156,17 @@ class CurtainListFragment : Fragment() {
         val downloadProgressBar = requireView().findViewById<ProgressBar>(R.id.downloadProgressBar)
         val downloadProgressText = requireView().findViewById<TextView>(R.id.tvDownloadProgress)
         val downloadProgressContainer = requireView().findViewById<View>(R.id.downloadProgressContainer)
+        val contentContainer = requireView().findViewById<LinearLayout>(R.id.contentContainer)
+        val paginationInfo = requireView().findViewById<TextView>(R.id.paginationInfo)
+        val loadMoreLayout = requireView().findViewById<LinearLayout>(R.id.loadMoreLayout)
+        val loadMoreButton = requireView().findViewById<Button>(R.id.loadMoreButton)
+        val loadMoreProgress = requireView().findViewById<ProgressBar>(R.id.loadMoreProgress)
 
         viewLifecycleOwner.lifecycleScope.launch {
             // Observe loading state
             viewModel.isLoading.collectLatest { isLoading ->
                 progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+                contentContainer?.visibility = if (isLoading) View.GONE else View.VISIBLE
             }
         }
 
@@ -144,6 +186,15 @@ class CurtainListFragment : Fragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
+            // Observe load more state
+            viewModel.isLoadingMore.collectLatest { isLoadingMore ->
+                loadMoreProgress?.visibility = if (isLoadingMore) View.VISIBLE else View.GONE
+                loadMoreButton?.isEnabled = !isLoadingMore
+                loadMoreButton?.text = if (isLoadingMore) "Loading..." else "Load More Curtains"
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
             // Observe error state
             viewModel.error.collectLatest { error ->
                 if (!error.isNullOrBlank()) {
@@ -157,8 +208,30 @@ class CurtainListFragment : Fragment() {
             viewModel.curtains.collectLatest { curtains ->
                 adapter.submitList(curtains)
 
-                // Show empty state if list is empty
-                emptyStateView.visibility = if (curtains.isEmpty()) View.VISIBLE else View.GONE
+                // Show empty state if list is empty (when not loading)
+                val isEmpty = curtains.isEmpty() && !viewModel.isLoading.value
+                emptyStateView.visibility = if (isEmpty) View.VISIBLE else View.GONE
+                
+                // Update pagination info
+                if (curtains.isNotEmpty()) {
+                    paginationInfo?.apply {
+                        text = viewModel.getPaginationInfo()
+                        visibility = View.VISIBLE
+                    }
+                    
+                    // Show/hide load more button
+                    loadMoreLayout?.visibility = if (viewModel.hasMoreCurtains()) View.VISIBLE else View.GONE
+                    
+                    val remaining = viewModel.totalCurtains.value - curtains.size
+                    loadMoreButton?.text = if (viewModel.hasMoreCurtains()) {
+                        "Load More Curtains ($remaining remaining)"
+                    } else {
+                        "All curtains loaded"
+                    }
+                } else {
+                    paginationInfo?.visibility = View.GONE
+                    loadMoreLayout?.visibility = View.GONE
+                }
             }
         }
     }

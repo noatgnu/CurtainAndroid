@@ -19,7 +19,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@android:color/black"
+            android:textColor="?android:attr/textColorPrimary"
             android:textSize="16sp"
             android:textStyle="bold"
             app:layout_constraintEnd_toEndOf="parent"
@@ -34,6 +34,7 @@
             android:layout_marginTop="8dp"
             android:ellipsize="end"
             android:maxLines="2"
+            android:textColor="?android:attr/textColorSecondary"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvLinkId"
@@ -47,7 +48,7 @@
             android:background="@drawable/bg_curtain_type"
             android:paddingHorizontal="8dp"
             android:paddingVertical="4dp"
-            android:textColor="@android:color/white"
+            android:textColor="?android:attr/textColorPrimaryInverse"
             android:textSize="12sp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvDescription"
@@ -60,22 +61,41 @@
             android:layout_marginTop="8dp"
             android:layout_marginStart="16dp"
             android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
             app:layout_constraintStart_toEndOf="@+id/tvType"
             app:layout_constraintTop_toBottomOf="@+id/tvDescription"
             app:layout_constraintBottom_toBottomOf="@+id/tvType"
             tools:text="File size: 1.2 MB" />
 
-        <ImageButton
-            android:id="@+id/btnRedownload"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Redownload"
-            android:padding="12dp"
-            android:src="@android:drawable/ic_menu_rotate"
+        <LinearLayout
+            android:id="@+id/btnDownloadContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="?attr/selectableItemBackground"
+            android:padding="8dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvDescription"
-            app:layout_constraintBottom_toBottomOf="@+id/tvType" />
+            app:layout_constraintBottom_toBottomOf="@+id/tvType">
+
+            <ImageView
+                android:id="@+id/btnActionIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_download"
+                android:contentDescription="Download" />
+
+            <TextView
+                android:id="@+id/tvActionLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Download"
+                android:textSize="10sp"
+                android:textColor="?android:attr/textColorSecondary" />
+
+        </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.cardview.widget.CardView>

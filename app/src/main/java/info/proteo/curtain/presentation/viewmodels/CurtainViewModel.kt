@@ -21,6 +21,17 @@ class CurtainViewModel @Inject constructor(
 
     private val _curtains = MutableStateFlow<List<CurtainEntity>>(emptyList())
     val curtains: StateFlow<List<CurtainEntity>> = _curtains
+    
+    // Pagination state
+    private val _allCurtains = mutableListOf<CurtainEntity>()
+    private val _loadedCurtains = mutableListOf<CurtainEntity>()
+    private var currentPage = 0
+    private var hasMoreData = true
+    
+    companion object {
+        private const val PAGE_SIZE = 10
+        private const val INITIAL_PAGE_SIZE = 5
+    }
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
@@ -33,6 +44,12 @@ class CurtainViewModel @Inject constructor(
 
     private val _isDownloading = MutableStateFlow(false)
     val isDownloading: StateFlow<Boolean> = _isDownloading
+    
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore
+    
+    private val _totalCurtains = MutableStateFlow(0)
+    val totalCurtains: StateFlow<Int> = _totalCurtains
 
     private lateinit var settingsService: CurtainDataService
 
@@ -46,6 +63,12 @@ class CurtainViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            
+            // Reset pagination state
+            currentPage = 0
+            hasMoreData = true
+            _allCurtains.clear()
+            _loadedCurtains.clear()
 
             try {
                 curtainDao.getAll()
@@ -53,7 +76,12 @@ class CurtainViewModel @Inject constructor(
                         _error.value = e.message
                     }
                     .collectLatest { curtains ->
-                        _curtains.value = curtains
+                        _allCurtains.clear()
+                        _allCurtains.addAll(curtains)
+                        _totalCurtains.value = curtains.size
+                        
+                        // Load initial page
+                        loadInitialPage()
                         _isLoading.value = false
                     }
             } catch (e: Exception) {
@@ -61,6 +89,55 @@ class CurtainViewModel @Inject constructor(
                 _isLoading.value = false
             }
         }
+    }
+    
+    private fun loadInitialPage() {
+        val initialCurtains = _allCurtains.take(INITIAL_PAGE_SIZE)
+        _loadedCurtains.clear()
+        _loadedCurtains.addAll(initialCurtains)
+        _curtains.value = _loadedCurtains.toList()
+        
+        hasMoreData = _allCurtains.size > INITIAL_PAGE_SIZE
+        Log.d("CurtainViewModel", "Loaded initial ${initialCurtains.size} curtains, total: ${_allCurtains.size}, hasMore: $hasMoreData")
+    }
+    
+    fun loadMoreCurtains() {
+        if (isLoadingMore.value || !hasMoreData) return
+        
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            
+            try {
+                currentPage++
+                val startIndex = INITIAL_PAGE_SIZE + (currentPage - 1) * PAGE_SIZE
+                val endIndex = minOf(startIndex + PAGE_SIZE, _allCurtains.size)
+                
+                if (startIndex >= _allCurtains.size) {
+                    hasMoreData = false
+                    _isLoadingMore.value = false
+                    return@launch
+                }
+                
+                val newCurtains = _allCurtains.subList(startIndex, endIndex)
+                _loadedCurtains.addAll(newCurtains)
+                _curtains.value = _loadedCurtains.toList()
+                
+                hasMoreData = _loadedCurtains.size < _allCurtains.size
+                Log.d("CurtainViewModel", "Loaded ${newCurtains.size} more curtains, total loaded: ${_loadedCurtains.size}/${_allCurtains.size}")
+                
+                _isLoadingMore.value = false
+                
+            } catch (e: Exception) {
+                _error.value = e.message
+                _isLoadingMore.value = false
+            }
+        }
+    }
+    
+    fun hasMoreCurtains(): Boolean = hasMoreData
+    
+    fun getPaginationInfo(): String {
+        return "Showing ${_loadedCurtains.size} of ${_allCurtains.size} curtains"
     }
 
     /**
