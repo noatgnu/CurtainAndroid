@@ -97,6 +97,7 @@ class CurtainDetailsFragment : Fragment() {
             when (position) {
                 0 -> tab.text = "Details"
                 1 -> tab.text = "Volcano Plot"
+                2 -> tab.text = "Protein Details"
             }
         }.attach()
     }

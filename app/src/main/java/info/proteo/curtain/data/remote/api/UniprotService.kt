@@ -32,10 +32,10 @@ class UniprotService @Inject constructor() {
      * @param accessionId The primary accession ID to look up
      * @return The UniProt data for the accession ID, or null if not found
      */
-    fun getUniprotFromPrimary(accessionId: String): Any? {
+    fun getUniprotFromPrimary(accessionId: String): MutableMap<String, Any>? {
         // Direct lookup in the database
         if (db.containsKey(accessionId)) {
-            return db[accessionId]
+            return db[accessionId] as MutableMap<String, Any>?
         }
 
         // Try to find through accession map
@@ -46,7 +46,7 @@ class UniprotService @Inject constructor() {
                     if (dataMap.containsKey(acc)) {
                         val mappedAcc = dataMap[acc]
                         if (mappedAcc != null && db.containsKey(mappedAcc.toString())) {
-                            return db[mappedAcc]
+                            return db[mappedAcc] as MutableMap<String, Any>?
                         }
                     }
                 }

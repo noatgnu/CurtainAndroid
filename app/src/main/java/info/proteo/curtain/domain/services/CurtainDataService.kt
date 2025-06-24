@@ -1,6 +1,5 @@
 package info.proteo.curtain
 
-import android.R
 import android.util.Log
 import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
@@ -22,14 +21,7 @@ import kotlin.collections.get
 import kotlin.text.contains
 import kotlin.math.log2
 import kotlin.math.log10
-import kotlin.text.contains
-import kotlin.text.get
 
-
-/**
- * CurtainDataService provides functionality for handling and processing
- * Curtain data, including JSON deserialization and data structure management.
- */
 class CurtainDataService {
     // State and event flows
     private val _loadDataTrigger = MutableSharedFlow<Boolean>()
@@ -118,13 +110,14 @@ class CurtainDataService {
                     val uniprotObj = extraData["uniprot"] as? Map<String, Any>
                     uniprotObj?.let { uniprot ->
                         // Process Uniprot data
-                        uniprotData.results = uniprot["results"] as? Map<String, Any> ?: mapOf()
+                        uniprotData.results = convertToMutableMap(uniprot["results"]) as? Map<String, Any> ?: mapOf()
                         uniprotData.dataMap = convertToMutableMap(uniprot["dataMap"])
-                        uniprotData.accMap = convertToMutableMap(uniprot["accMap"])
+                        uniprotData.accMap = convertToMutableAccMap(uniprot["accMap"])
                         uniprotData.db = convertToMutableMap(uniprot["db"])
                         uniprotData.organism = uniprot["organism"] as? String ?: ""
-                        uniprotData.geneNameToAcc = uniprot["geneNameToAcc"] as? Map<String, Any>
+                        uniprotData.geneNameToAcc = convertToMutableMap(uniprot["geneNameToAcc"])
                     }
+                    Log.d("CurtainDataService", "Uniprot DB Size: ${uniprotData.db.size}")
 
                     @Suppress("UNCHECKED_CAST")
                     val dataObj = extraData["data"] as? Map<String, Any>
@@ -269,28 +262,53 @@ class CurtainDataService {
         return result
     }
 
+    private fun convertToMutableAccMap(data: Any?): MutableMap<String, List<String>> {
+        val mapValue = (data as? Map<*, *>)?.get("value")
+        when (mapValue) {
+            is List<*> -> {
+                val result = mutableMapOf<String, List<String>>()
+                mapValue.forEachIndexed { index, pair ->
+                    if (pair is List<*> && pair.size >= 2) {
+                        val key = pair[0]?.toString()
+                        val valueList = pair[1] as? List<String>
+                        if (key != null && valueList != null) {
+                            result[key] = valueList
+                        }
+                    }
+                }
+                return result
+            }
+            else -> {
+                Log.w("CurtainDataService", "No valid accMap value array found, returning empty map")
+                return mutableMapOf()
+            }
+        }
+    }
+
     /**
      * Convert various map representations to MutableMap
      */
     @Suppress("UNCHECKED_CAST")
     private fun convertToMutableMap(data: Any?): MutableMap<String, Any> {
-        return when (data) {
-            is Map<*, *> -> data as MutableMap<String, Any>
-            else -> {
-                val mapValue = (data as? Map<*, *>)?.get("value")
-                when (mapValue) {
-                    is List<*> -> {
-                        val result = mutableMapOf<String, Any>()
-                        mapValue.forEach { pair ->
-                            if (pair is List<*> && pair.size >= 2) {
-                                val key = pair[0]?.toString() ?: return@forEach
-                                result[key] = pair[1] ?: return@forEach
-                            }
+        val mapValue = (data as? Map<*, *>)?.get("value")
+        when (mapValue) {
+            is List<*> -> {
+                val result = mutableMapOf<String, Any>()
+                mapValue.forEachIndexed { index, pair ->
+                    if (pair is List<*> && pair.size >= 2) {
+                        val key = pair[0]?.toString()
+                        val value = pair[1]
+                        if (key != null && value != null) {
+                            result[key] = value
                         }
-                        result
                     }
-                    else -> mutableMapOf()
                 }
+                Log.d("CurtainDataService", "Final result size: ${result.size}")
+                return result
+            }
+            else -> {
+                Log.w("CurtainDataService", "No valid value array found, returning empty map")
+                return mutableMapOf()
             }
         }
     }
@@ -723,8 +741,8 @@ data class UniprotData(
     var dataMap: MutableMap<String, Any> = mutableMapOf(),
     var db: MutableMap<String, Any> = mutableMapOf(),
     var organism: String = "",
-    var accMap: MutableMap<String, Any> = mutableMapOf(),
-    var geneNameToAcc: Any? = null
+    var accMap: MutableMap<String, List<String>> = mutableMapOf(),
+    var geneNameToAcc: MutableMap<String, Any> = mutableMapOf()
 )
 
 /**

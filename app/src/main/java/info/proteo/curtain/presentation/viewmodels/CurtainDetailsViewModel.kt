@@ -10,6 +10,7 @@ import info.proteo.curtain.CurtainDao
 import info.proteo.curtain.CurtainDataService
 import info.proteo.curtain.CurtainSettings
 import info.proteo.curtain.UniprotData
+import info.proteo.curtain.UniprotService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,8 +54,11 @@ class CurtainDetailsViewModel @Inject constructor(
 
     var curtainDataService: CurtainDataService
 
+    var uniprotService: UniprotService
+
     init {
         curtainDataService = CurtainDataService()
+        uniprotService = UniprotService()
 
     }
 
@@ -112,6 +116,14 @@ class CurtainDetailsViewModel @Inject constructor(
                 _curtainData.value = curtainDataService.curtainData
                 _uniprotData.value = curtainDataService.uniprotData
                 _curtainSettings.value = curtainDataService.curtainSettings
+                uniprotService.results = curtainDataService.uniprotData.results.toMutableMap()
+                uniprotService.dataMap = curtainDataService.uniprotData.dataMap.toMutableMap()
+                uniprotService.accMap = curtainDataService.uniprotData.accMap.toMutableMap()
+                uniprotService.db = curtainDataService.uniprotData.db
+                uniprotService.geneNameToAcc = curtainDataService.uniprotData.geneNameToAcc
+                Log.d("CurtainDetailsViewModel", "Uniprot data loaded: ${_uniprotData.value?.results?.size} entries")
+                Log.d("CurtainDetailsViewModel", "Uniprot db loaded: ${uniprotService.db.size} entries")
+
                 _isDataLoaded.value = true
             } catch (e: Exception) {
                 _error.value = "Error deserializing file: ${e.message}"

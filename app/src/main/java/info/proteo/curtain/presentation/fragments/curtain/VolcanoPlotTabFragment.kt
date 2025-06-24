@@ -644,6 +644,7 @@ class VolcanoPlotTabFragment : Fragment() {
                         colorMap = result.colorMap,
                         volcanoAxis = result.updatedVolcanoAxis
                     )
+                    Log.d("VolcanoPlot", "${updatedSettings.volcanoAxis}")
                     viewModel.updateCurtainSettings(updatedSettings)
                     val html = createVolcanoPlotHtml(result.jsonData)
                     binding.webView.loadDataWithBaseURL(
@@ -697,9 +698,8 @@ class VolcanoPlotTabFragment : Fragment() {
     }
 
     private fun createVolcanoPlotHtml(jsonData: String): String {
-        // Get settings from CurtainDataService
         val curtainSettings = viewModel.curtainSettings.value ?: throw IllegalStateException("Curtain settings not available")
-
+        Log.d("VolcanoPlot", "Creating volcano plot HTML with settings: ${curtainSettings.volcanoAxis}")
         return """
     <!DOCTYPE html>
     <html>
@@ -794,9 +794,11 @@ class VolcanoPlotTabFragment : Fragment() {
 
             // Create layout with cutoff lines
             const layout = {
-                title: '${curtainSettings.volcanoPlotTitle}',
+                title: ${JSONObject.quote(curtainSettings.volcanoPlotTitle)},
                 xaxis: {
-                    title: '${curtainSettings.volcanoAxis.x}',
+                    title: {
+                        text: ${JSONObject.quote(curtainSettings.volcanoAxis.x)}
+                    },
                     range: ${if (curtainSettings.volcanoAxis.minX != null || curtainSettings.volcanoAxis.maxX != null)
             "[${curtainSettings.volcanoAxis.minX ?: "null"}, ${curtainSettings.volcanoAxis.maxX ?: "null"}]"
         else "null"},
@@ -807,7 +809,9 @@ class VolcanoPlotTabFragment : Fragment() {
                     gridcolor: '#e0e0e0'
                 },
                 yaxis: {
-                    title: '${curtainSettings.volcanoAxis.y}',
+                    title: {
+                        text: ${JSONObject.quote(curtainSettings.volcanoAxis.y)}
+                    },
                     range: ${if (curtainSettings.volcanoAxis.minY != null || curtainSettings.volcanoAxis.maxY != null)
             "[${curtainSettings.volcanoAxis.minY ?: "null"}, ${curtainSettings.volcanoAxis.maxY ?: "null"}]"
         else "null"},
@@ -820,17 +824,17 @@ class VolcanoPlotTabFragment : Fragment() {
                 margin: {
                     l: ${curtainSettings.volcanoPlotDimension?.margin?.left ?: 50},
                     r: ${curtainSettings.volcanoPlotDimension?.margin?.right ?: 50},
-                    b: ${(curtainSettings.volcanoPlotDimension?.margin?.bottom ?: 50) + 50},  // Add extra space for legend
+                    b: ${(curtainSettings.volcanoPlotDimension?.margin?.bottom ?: 50)}, 
                     t: ${curtainSettings.volcanoPlotDimension?.margin?.top ?: 50}
                 },
                 hovermode: 'closest',
                 // Legend at the bottom
                 legend: {
-                    orientation: 'h',  // horizontal orientation
+                    orientation: 'h',  
                     yanchor: 'top',
-                    y: -0.2,          // position below the plot
+                    y: -0.2,
                     xanchor: 'center',
-                    x: 0.5            // center horizontally
+                    x: 0.5 
                 },
                 paper_bgcolor: ${if (curtainSettings.backGroundColorGrey) "'#f0f0f0'" else "'white'"},
                 plot_bgcolor: ${if (curtainSettings.backGroundColorGrey) "'#f0f0f0'" else "'white'"}
