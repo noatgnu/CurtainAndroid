@@ -28,6 +28,64 @@
             android:text="Loading proteins..."
             android:visibility="gone" />
 
+        <LinearLayout
+            android:id="@+id/chartControlsLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="?attr/colorSurface"
+            android:visibility="gone">
+            
+            <LinearLayout
+                android:id="@+id/imputationToggleLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:gravity="center_vertical">
+                
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Show Imputed Data"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary" />
+                
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/imputationToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+            
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?attr/colorOutlineVariant" />
+            
+            <LinearLayout
+                android:id="@+id/peptideCountToggleLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:gravity="center_vertical">
+                
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Show Peptide Count Heatmap"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary" />
+                
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/peptideCountToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+        </LinearLayout>
+
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/recyclerView"
             android:layout_width="match_parent"

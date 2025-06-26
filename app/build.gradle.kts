@@ -115,6 +115,7 @@ dependencies {
     implementation(libs.javapoet)
     implementation("org.jetbrains.kotlinx:dataframe:0.8.1")
     implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.preference)
 
 
 }

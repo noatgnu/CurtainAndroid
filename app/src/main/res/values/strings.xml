@@ -1,3 +1,16 @@
 <resources>
     <string name="app_name">Curtain</string>
+    
+    <!-- Theme preferences -->
+    <string-array name="theme_entries">
+        <item>Light</item>
+        <item>Dark</item>
+        <item>Follow system</item>
+    </string-array>
+    
+    <string-array name="theme_values">
+        <item>light</item>
+        <item>dark</item>
+        <item>system</item>
+    </string-array>
 </resources>

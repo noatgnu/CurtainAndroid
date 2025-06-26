@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bootstrap-compatible brand colors (same in dark mode) -->
+    <color name="primary">#FF2E2D62</color>
+    <color name="primary_variant">#FF1F1E45</color>
+    <color name="secondary">#FFA4A4A4</color>
+    <color name="success">#FF003632</color>
+    <color name="info">#FF8294C4</color>
+    <color name="warning">#FFFFD6A5</color>
+    <color name="danger">#FFFF9B9B</color>
+    
+    <!-- Gray scale for dark mode -->
+    <color name="light">#FFF8F9FA</color>
+    <color name="dark">#FF212529</color>
+    
+    <!-- Basic colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    
+    <!-- Surface colors for dark mode -->
+    <color name="surface_dark">#FF212529</color>
+    <color name="surface_variant_dark">#FF343A40</color>
+    <color name="on_surface_dark">#FFFFFFFF</color>
+    <color name="on_surface_variant_dark">#FFA4A4A4</color>
+    
+    <!-- Legacy colors for compatibility -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+</resources>

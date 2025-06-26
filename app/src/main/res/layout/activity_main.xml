@@ -10,8 +10,7 @@
     <!-- Main Content -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fitsSystemWindows="true">
+        android:layout_height="match_parent">
 
         <com.google.android.material.appbar.AppBarLayout
             android:id="@+id/appBarLayout"
@@ -26,7 +25,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
                 android:background="?attr/colorPrimary"
-                app:title="Curtain" />
+                app:title="Curtain"
+                app:titleTextColor="?attr/colorOnPrimary"
+                app:navigationIconTint="?attr/colorOnPrimary" />
 
         </com.google.android.material.appbar.AppBarLayout>
 

@@ -50,6 +50,8 @@ class ProteinDetailListTabFragment : Fragment() {
     private var hasMoreData = true
     private var allSelectedProteins = listOf<String>()
     private val loadedProteinDetails = mutableListOf<ProteinDetail>()
+    private var isImputationEnabled = false
+    private var isPeptideCountEnabled = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -65,6 +67,7 @@ class ProteinDetailListTabFragment : Fragment() {
         
         setupRecyclerView()
         setupPaginationControls()
+        setupChartToggles()
         
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -82,9 +85,41 @@ class ProteinDetailListTabFragment : Fragment() {
             loadMoreProteins()
         }
     }
+    
+    private fun setupChartToggles() {
+        // Initialize imputation toggle state from settings
+        isImputationEnabled = viewModel.curtainSettings.value?.enableImputation ?: false
+        binding.imputationToggle.isChecked = isImputationEnabled
+        
+        // Initialize peptide count toggle state from settings
+        isPeptideCountEnabled = viewModel.curtainSettings.value?.viewPeptideCount ?: false
+        binding.peptideCountToggle.isChecked = isPeptideCountEnabled
+        
+        // Set up imputation toggle listener
+        binding.imputationToggle.setOnCheckedChangeListener { _, isChecked ->
+            isImputationEnabled = isChecked
+            refreshAllCharts()
+        }
+        
+        // Set up peptide count toggle listener
+        binding.peptideCountToggle.setOnCheckedChangeListener { _, isChecked ->
+            isPeptideCountEnabled = isChecked
+            refreshAllCharts()
+        }
+    }
 
     private fun setupRecyclerView() {
-        proteinDetailAdapter = ProteinDetailAdapter { viewModel.curtainSettings.value?.colorMap ?: mapOf() }
+        proteinDetailAdapter = ProteinDetailAdapter(
+            colorMapProvider = { viewModel.curtainSettings.value?.colorMap ?: mapOf() },
+            imputationProvider = { 
+                ImputationSettings(
+                    isEnabled = isImputationEnabled,
+                    imputationMap = viewModel.curtainSettings.value?.imputationMap ?: mapOf(),
+                    peptideCountData = viewModel.curtainSettings.value?.peptideCountData ?: mapOf(),
+                    viewPeptideCount = isPeptideCountEnabled
+                )
+            }
+        )
         val layoutManager = LinearLayoutManager(requireContext())
         
         binding.recyclerView.apply {
@@ -109,6 +144,11 @@ class ProteinDetailListTabFragment : Fragment() {
                 }
             })
         }
+    }
+    
+    private fun refreshAllCharts() {
+        // Force refresh all charts with new imputation settings
+        proteinDetailAdapter.notifyDataSetChanged()
     }
     
     private fun updatePaginationInfo() {
@@ -400,6 +440,14 @@ class ProteinDetailListTabFragment : Fragment() {
             contentLayout.visibility = View.VISIBLE
             errorText.visibility = View.GONE
             noSelectionText.visibility = View.GONE
+            
+            // Show chart controls if imputation data or peptide count data is available
+            val hasImputationData = viewModel.curtainSettings.value?.imputationMap?.isNotEmpty() == true
+            val hasPeptideCountData = viewModel.curtainSettings.value?.peptideCountData?.isNotEmpty() == true
+            
+            chartControlsLayout.visibility = if (hasImputationData || hasPeptideCountData) View.VISIBLE else View.GONE
+            imputationToggleLayout.visibility = if (hasImputationData) View.VISIBLE else View.GONE
+            peptideCountToggleLayout.visibility = if (hasPeptideCountData) View.VISIBLE else View.GONE
         }
     }
 
@@ -455,9 +503,19 @@ class ProteinDetailListTabFragment : Fragment() {
         val sampleName: String,
         val value: String
     )
+    
+    data class ImputationSettings(
+        val isEnabled: Boolean,
+        val imputationMap: Map<String, Any>,
+        val peptideCountData: Map<String, Any>,
+        val viewPeptideCount: Boolean
+    )
 
     // Adapter classes
-    class ProteinDetailAdapter(private val colorMapProvider: () -> Map<String, String>) : RecyclerView.Adapter<ProteinDetailAdapter.ProteinDetailViewHolder>() {
+    class ProteinDetailAdapter(
+        private val colorMapProvider: () -> Map<String, String>,
+        private val imputationProvider: () -> ImputationSettings
+    ) : RecyclerView.Adapter<ProteinDetailAdapter.ProteinDetailViewHolder>() {
         private var proteinDetails = listOf<ProteinDetail>()
         private var colorMap = mapOf<String, String>()
 
@@ -480,7 +538,8 @@ class ProteinDetailListTabFragment : Fragment() {
 
         override fun onBindViewHolder(holder: ProteinDetailViewHolder, position: Int) {
             val currentColorMap = colorMapProvider()
-            holder.bind(proteinDetails[position], currentColorMap)
+            val currentImputationSettings = imputationProvider()
+            holder.bind(proteinDetails[position], currentColorMap, currentImputationSettings)
         }
 
         override fun getItemCount(): Int = proteinDetails.size
@@ -488,7 +547,7 @@ class ProteinDetailListTabFragment : Fragment() {
         class ProteinDetailViewHolder(private val binding: ItemProteinDetailBinding) : 
             RecyclerView.ViewHolder(binding.root) {
 
-            fun bind(proteinDetail: ProteinDetail, colorMap: Map<String, String>) {
+            fun bind(proteinDetail: ProteinDetail, colorMap: Map<String, String>, imputationSettings: ImputationSettings) {
                 binding.apply {
                     // Update main protein info
                     conditionTitle.text = "${proteinDetail.geneName} (${proteinDetail.proteinId})"
@@ -496,7 +555,7 @@ class ProteinDetailListTabFragment : Fragment() {
                     geneName.text = "Gene Name: ${proteinDetail.geneName}"
 
                     // Setup chart WebView
-                    setupChartWebView(chartWebView, proteinDetail, colorMap)
+                    setupChartWebView(chartWebView, proteinDetail, colorMap, imputationSettings)
 
                     // Setup raw data button
                     viewRawDataButton.setOnClickListener {
@@ -547,7 +606,8 @@ class ProteinDetailListTabFragment : Fragment() {
             private fun setupChartWebView(
                 webView: WebView,
                 proteinDetail: ProteinDetail,
-                colorMap: Map<String, String>
+                colorMap: Map<String, String>,
+                imputationSettings: ImputationSettings
             ) {
                 webView.apply {
                     settings.apply {
@@ -569,7 +629,11 @@ class ProteinDetailListTabFragment : Fragment() {
                             proteinId = proteinDetail.proteinId,
                             geneName = proteinDetail.geneName,
                             conditionDataList = proteinDetail.conditionDataList,
-                            colorMap = colorMap
+                            colorMap = colorMap,
+                            peptideCountData = imputationSettings.peptideCountData as? Map<String, Map<String, String>>,
+                            imputationMap = imputationSettings.imputationMap as? Map<String, Map<String, Boolean>>,
+                            viewPeptideCount = imputationSettings.viewPeptideCount,
+                            enableImputation = imputationSettings.isEnabled
                         )
                         
                         loadDataWithBaseURL("file:///android_asset/", chartHtml, "text/html", "UTF-8", null)

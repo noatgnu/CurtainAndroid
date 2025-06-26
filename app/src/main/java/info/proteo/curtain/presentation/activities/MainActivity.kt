@@ -8,9 +8,11 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.WindowCompat
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.findNavController
@@ -22,6 +24,7 @@ import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.navigation.NavigationView
 import dagger.hilt.android.AndroidEntryPoint
+import info.proteo.curtain.utils.ThemeHelper
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -39,10 +42,16 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Apply saved theme preference
+        ThemeHelper.applyTheme(this)
+        
         // Enable edge-to-edge display
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
         setContentView(R.layout.activity_main)
+        
+        // Handle window insets for proper spacing
+        setupWindowInsets()
 
         // Set up the toolbar
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
@@ -80,6 +89,34 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
         // Handle the intent if the app was launched from a deep link
         handleIntent(intent)
+    }
+
+    private fun setupWindowInsets() {
+        val rootView = findViewById<DrawerLayout>(R.id.drawerLayout)
+        val appBarLayout = findViewById<View>(R.id.appBarLayout)
+        val navHostFragment = findViewById<View>(R.id.nav_host_fragment)
+        
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            // Apply top inset to app bar
+            appBarLayout.setPadding(
+                appBarLayout.paddingLeft,
+                systemBars.top,
+                appBarLayout.paddingRight,
+                appBarLayout.paddingBottom
+            )
+            
+            // Apply bottom inset to nav host fragment
+            navHostFragment.setPadding(
+                navHostFragment.paddingLeft,
+                navHostFragment.paddingTop,
+                navHostFragment.paddingRight,
+                systemBars.bottom
+            )
+            
+            insets
+        }
     }
 
     private fun checkCurtainDataAndUpdateUI() {
@@ -186,6 +223,10 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             R.id.nav_filter_lists -> {
                 // Navigate to the DataFilterListActivity using the nav graph action
                 findNavController(R.id.nav_host_fragment).navigate(R.id.action_curtainListFragment_to_dataFilterListActivity)
+            }
+            R.id.nav_settings -> {
+                // Navigate to Settings Fragment using navigation graph
+                findNavController(R.id.nav_host_fragment).navigate(R.id.action_curtainListFragment_to_settingsFragment)
             }
         }
 
