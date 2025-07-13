@@ -7,6 +7,7 @@ import info.proteo.curtain.DataFilterListRepository
 import info.proteo.curtain.DataFilterList
 import info.proteo.curtain.DataFilterListRequest
 import info.proteo.curtain.UniprotService
+import info.proteo.curtain.CurtainDataService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,7 +36,19 @@ class SearchService @Inject constructor(
     private var currentCurtainData: AppData? = null
     
     var uniprotService: UniprotService? = null
-    
+    var curtainDataService: CurtainDataService? = null
+
+    /**
+     * Initialize SearchService with services from CurtainDetailsViewModel
+     */
+    fun initializeWithViewModelServices(
+        uniprotService: UniprotService,
+        curtainDataService: CurtainDataService
+    ) {
+        this.uniprotService = uniprotService
+        this.curtainDataService = curtainDataService
+    }
+
     suspend fun performTypeaheadSearch(
         query: String,
         searchType: SearchType,

@@ -29,6 +29,7 @@ import javax.inject.Inject
 class CurtainDetailsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val curtainDao: CurtainDao,
+    val searchService: SearchService,
 ) : ViewModel() {
 
     // Get the curtain ID from navigation arguments
@@ -121,6 +122,8 @@ class CurtainDetailsViewModel @Inject constructor(
                 uniprotService.db = curtainDataService.uniprotData.db
                 uniprotService.geneNameToAcc = curtainDataService.uniprotData.geneNameToAcc
 
+                // Initialize SearchService with the services from this ViewModel
+                searchService.initializeWithViewModelServices(uniprotService, curtainDataService)
 
                 _curtainSettings.value = curtainDataService.curtainSettings
                 _isLoading.value = false

@@ -20,13 +20,11 @@ import info.proteo.curtain.R
 import info.proteo.curtain.data.models.SearchType
 import info.proteo.curtain.data.models.TypeaheadSuggestion
 import info.proteo.curtain.data.models.BatchSearchRequest
-import info.proteo.curtain.data.services.SearchService
 import info.proteo.curtain.databinding.DialogProteinSearchBinding
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @AndroidEntryPoint
 class ProteinSearchDialog : DialogFragment() {
@@ -36,8 +34,6 @@ class ProteinSearchDialog : DialogFragment() {
     
     private val viewModel: CurtainDetailsViewModel by activityViewModels()
 
-    private lateinit var searchService: SearchService
-    
     private lateinit var suggestionsAdapter: TypeaheadSuggestionsAdapter
     private var searchJob: Job? = null
     
@@ -52,7 +48,7 @@ class ProteinSearchDialog : DialogFragment() {
         
         // Initialize SearchService with current curtain data
         viewModel.curtainData.value?.let { curtainData ->
-            searchService!!.restoreSearchListsFromCurtainData(curtainData)
+            viewModel.searchService.restoreSearchListsFromCurtainData(curtainData)
         }
         
         setupUI()
@@ -132,7 +128,7 @@ class ProteinSearchDialog : DialogFragment() {
                 Log.d("ProteinSearchDialog", "  allGenes sample: ${curtainData.allGenes?.take(5)}")
                 
                 Log.d("ProteinSearchDialog", "Calling searchService.performTypeaheadSearch...")
-                val suggestions = searchService.performTypeaheadSearch(
+                val suggestions = viewModel.searchService.performTypeaheadSearch(
                     query = query,
                     searchType = selectedSearchType,
                     curtainData = curtainData,
@@ -203,7 +199,7 @@ class ProteinSearchDialog : DialogFragment() {
                     overwriteExisting = false
                 )
                 
-                val (searchResults, statistics) = searchService.performBatchSearch(
+                val (searchResults, statistics) = viewModel.searchService.performBatchSearch(
                     request = request,
                     curtainData = curtainData
                 )
