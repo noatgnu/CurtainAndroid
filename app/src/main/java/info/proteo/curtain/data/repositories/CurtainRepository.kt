@@ -225,10 +225,11 @@ class CurtainRepository @Inject constructor(
      *
      * @param linkId The unique ID of the curtain to fetch
      * @param apiUrl The base URL of the API to use (hostname)
+     * @param frontendURL The frontend URL for the curtain (optional)
      * @return The fetched Curtain if successful
      * @throws Exception if the curtain cannot be fetched
      */
-    suspend fun fetchCurtainByLinkIdAndHost(linkId: String, apiUrl: String): CurtainEntity {
+    suspend fun fetchCurtainByLinkIdAndHost(linkId: String, apiUrl: String, frontendURL: String? = null): CurtainEntity {
         return withContext(Dispatchers.IO) {
             try {
                 // First check if we already have this curtain stored locally
@@ -245,7 +246,9 @@ class CurtainRepository @Inject constructor(
 
                 if (response.isSuccessful && response.body() != null) {
                     // Convert API response to entity
-                    val curtainEntity = response.body()!!.toCurtainEntity(apiUrl)
+                    val curtainEntity = response.body()!!.toCurtainEntity(apiUrl).copy(
+                        frontendURL = frontendURL
+                    )
 
                     // Check and store the site settings BEFORE inserting the curtain
                     // This is used to satisfy the foreign key constraint
@@ -423,6 +426,26 @@ class CurtainRepository @Inject constructor(
             created = parseCreatedDateToTimestamp(this.created),
             updated = System.currentTimeMillis()
         )
+    }
+
+    // Update only the description of an existing curtain
+    suspend fun updateCurtainDescription(linkId: String, description: String) {
+        return withContext(Dispatchers.IO) {
+            try {
+                val existingCurtain = curtainDao.getById(linkId)
+                if (existingCurtain != null) {
+                    val updatedCurtain = existingCurtain.copy(
+                        description = description,
+                        updated = System.currentTimeMillis()
+                    )
+                    curtainDao.update(updatedCurtain)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Don't throw exception for description updates, just log
+                android.util.Log.w("CurtainRepository", "Failed to update curtain description: ${e.message}")
+            }
+        }
     }
 
     private fun parseCreatedDateToTimestamp(createdDateString: String): Long {

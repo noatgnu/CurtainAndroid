@@ -66,6 +66,24 @@ class VolcanoPlotTabFragment : Fragment() {
             settings.allowFileAccess = true
             settings.allowContentAccess = true
 
+            // Request disallow intercept to prevent parent from handling touch events
+            setOnTouchListener { v, event ->
+                when (event.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        // Request parent to not intercept touch events
+                        v.parent.requestDisallowInterceptTouchEvent(true)
+                        false // Allow WebView to handle the touch
+                    }
+                    android.view.MotionEvent.ACTION_UP, 
+                    android.view.MotionEvent.ACTION_CANCEL -> {
+                        // Allow parent to intercept touch events again
+                        v.parent.requestDisallowInterceptTouchEvent(false)
+                        false // Allow WebView to handle the touch
+                    }
+                    else -> false // Allow WebView to handle all other touch events
+                }
+            }
+
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                     if (newProgress == 100) {
@@ -697,6 +715,97 @@ class VolcanoPlotTabFragment : Fragment() {
         return Pair(groups.joinToString(";"), position)
     }
 
+    private fun generateTextAnnotationsJS(textAnnotation: Map<String, Any>): String {
+        if (textAnnotation.isEmpty()) return ""
+        
+        val jsCode = StringBuilder()
+        textAnnotation.forEach { (title, annotationData) ->
+            // Cast annotation data to Map<String, Any>
+            @Suppress("UNCHECKED_CAST")
+            val data = annotationData as? Map<String, Any> ?: return@forEach
+            
+            // Check if this annotation should be shown
+            @Suppress("UNCHECKED_CAST")
+            val annotationDetails = data["data"] as? Map<String, Any> ?: return@forEach
+            val showAnnotation = annotationDetails["showannotation"] as? Boolean ?: false
+            
+            if (showAnnotation) {
+                // Extract annotation properties
+                val text = JSONObject.quote(annotationDetails["text"]?.toString() ?: title)
+                val x = when (val xVal = annotationDetails["x"]) {
+                    is Number -> xVal.toString()
+                    is String -> if (xVal.toDoubleOrNull() != null) xVal else "0"
+                    else -> "0"
+                }
+                val y = when (val yVal = annotationDetails["y"]) {
+                    is Number -> yVal.toString()
+                    is String -> if (yVal.toDoubleOrNull() != null) yVal else "0"
+                    else -> "0"
+                }
+                val xanchor = JSONObject.quote(annotationDetails["xanchor"]?.toString() ?: "center")
+                val yanchor = JSONObject.quote(annotationDetails["yanchor"]?.toString() ?: "bottom")
+                val showarrow = annotationDetails["showarrow"] as? Boolean ?: true
+                val arrowhead = when (val arrowheadVal = annotationDetails["arrowhead"]) {
+                    is Number -> arrowheadVal.toString()
+                    is String -> if (arrowheadVal.toIntOrNull() != null) arrowheadVal else "2"
+                    else -> "2"
+                }
+                val arrowsize = when (val arrowsizeVal = annotationDetails["arrowsize"]) {
+                    is Number -> arrowsizeVal.toString()
+                    is String -> if (arrowsizeVal.toDoubleOrNull() != null) arrowsizeVal else "1"
+                    else -> "1"
+                }
+                val arrowwidth = when (val arrowwidthVal = annotationDetails["arrowwidth"]) {
+                    is Number -> arrowwidthVal.toString()
+                    is String -> if (arrowwidthVal.toDoubleOrNull() != null) arrowwidthVal else "2"
+                    else -> "2"
+                }
+                val arrowcolor = JSONObject.quote(annotationDetails["arrowcolor"]?.toString() ?: "#000000")
+                val ax = when (val axVal = annotationDetails["ax"]) {
+                    is Number -> axVal.toString()
+                    is String -> if (axVal.toDoubleOrNull() != null) axVal else "0"
+                    else -> "0"
+                }
+                val ay = when (val ayVal = annotationDetails["ay"]) {
+                    is Number -> ayVal.toString()
+                    is String -> if (ayVal.toDoubleOrNull() != null) ayVal else "-40"
+                    else -> "-40"
+                }
+                val font = annotationDetails["font"] as? Map<String, Any>
+                val fontColor = JSONObject.quote(font?.get("color")?.toString() ?: "#000000")
+                val fontSize = when (val fontSizeVal = font?.get("size")) {
+                    is Number -> fontSizeVal.toString()
+                    is String -> if (fontSizeVal.toIntOrNull() != null) fontSizeVal else "12"
+                    else -> "12"
+                }
+                val fontFamily = JSONObject.quote(font?.get("family")?.toString() ?: "Arial")
+
+                jsCode.append("""
+                    annotations.push({
+                        text: $text,
+                        x: $x,
+                        y: $y,
+                        xanchor: $xanchor,
+                        yanchor: $yanchor,
+                        showarrow: $showarrow,
+                        arrowhead: $arrowhead,
+                        arrowsize: $arrowsize,
+                        arrowwidth: $arrowwidth,
+                        arrowcolor: $arrowcolor,
+                        ax: $ax,
+                        ay: $ay,
+                        font: {
+                            color: $fontColor,
+                            size: $fontSize,
+                            family: $fontFamily
+                        }
+                    });
+                """.trimIndent())
+            }
+        }
+        return jsCode.toString()
+    }
+
     private fun createVolcanoPlotHtml(jsonData: String): String {
         val curtainSettings = viewModel.curtainSettings.value ?: throw IllegalStateException("Curtain settings not available")
         Log.d("VolcanoPlot", "Creating volcano plot HTML with settings: ${curtainSettings.volcanoAxis}")
@@ -792,6 +901,10 @@ class VolcanoPlotTabFragment : Fragment() {
                 });
             }
 
+            // Process text annotations
+            const annotations = [];
+            ${generateTextAnnotationsJS(curtainSettings.textAnnotation)}
+
             // Create layout with cutoff lines
             const layout = {
                 title: ${JSONObject.quote(curtainSettings.volcanoPlotTitle)},
@@ -837,7 +950,8 @@ class VolcanoPlotTabFragment : Fragment() {
                     x: 0.5 
                 },
                 paper_bgcolor: ${if (curtainSettings.backGroundColorGrey) "'#f0f0f0'" else "'white'"},
-                plot_bgcolor: ${if (curtainSettings.backGroundColorGrey) "'#f0f0f0'" else "'white'"}
+                plot_bgcolor: ${if (curtainSettings.backGroundColorGrey) "'#f0f0f0'" else "'white'"},
+                annotations: annotations
             };
 
             // Calculate max Y value for vertical cutoff lines

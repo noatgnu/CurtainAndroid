@@ -168,13 +168,14 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
             // Check if this is the correct scheme and host we're expecting
             if (scheme == "curtain" && host == "open") {
-                // Extract uniqueId and apiURL from the URI
+                // Extract uniqueId, apiURL, and frontendURL from the URI
                 val uniqueId = uri.getQueryParameter("uniqueId")
                 val apiURL = uri.getQueryParameter("apiURL")
+                val frontendURL = uri.getQueryParameter("frontendURL") ?: uri.getQueryParameter("frontendURL")
 
                 if (!uniqueId.isNullOrEmpty() && !apiURL.isNullOrEmpty()) {
                     // Load and display the curtain with these parameters
-                    loadCurtain(uniqueId, apiURL)
+                    loadCurtain(uniqueId, apiURL, frontendURL)
                 } else {
                     Toast.makeText(this, "Invalid link: Missing required parameters", Toast.LENGTH_LONG).show()
                 }
@@ -188,16 +189,21 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         }
     }
 
-    private fun loadCurtain(uniqueId: String, apiURL: String) {
+    private fun loadCurtain(uniqueId: String, apiURL: String, frontendURL: String? = null) {
         // Show a loading indicator
-        Toast.makeText(this, "Loading curtain: $uniqueId from $apiURL", Toast.LENGTH_SHORT).show()
+        val message = if (frontendURL != null) {
+            "Loading curtain: $uniqueId from $apiURL (frontend: $frontendURL)"
+        } else {
+            "Loading curtain: $uniqueId from $apiURL"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
         // Use lifecycleScope to launch a coroutine
         lifecycleScope.launch {
             try {
                 // Here you would use your repository to load the curtain
                 // For example:
-                val result = curtainRepository.fetchCurtainByLinkIdAndHost(uniqueId, apiURL)
+                val result = curtainRepository.fetchCurtainByLinkIdAndHost(uniqueId, apiURL, frontendURL)
 
                 // Navigate to appropriate fragment or show content based on the result
                 // For now, just showing a toast with the result

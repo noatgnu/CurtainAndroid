@@ -36,6 +36,39 @@
             android:background="?attr/colorSurface"
             android:visibility="gone">
             
+            
+            <LinearLayout
+                android:id="@+id/searchFilterLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:gravity="center_vertical">
+                
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Filter by Search Lists"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary" />
+                
+                <Button
+                    android:id="@+id/searchFilterButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="All Proteins"
+                    android:textSize="12sp"
+                    android:minHeight="0dp"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+            </LinearLayout>
+            
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="?android:attr/listDivider" />
+            
+            
             <LinearLayout
                 android:id="@+id/imputationToggleLayout"
                 android:layout_width="match_parent"
@@ -61,7 +94,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="?attr/colorOutlineVariant" />
+                android:background="?android:attr/listDivider" />
             
             <LinearLayout
                 android:id="@+id/peptideCountToggleLayout"

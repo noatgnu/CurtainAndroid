@@ -3,6 +3,7 @@
     <!-- Bootstrap-compatible brand colors -->
     <color name="primary">#FF2E2D62</color>
     <color name="primary_variant">#FF1F1E45</color>
+    <color name="primary_container">#FF8294C4</color>
     <color name="secondary">#FFA4A4A4</color>
     <color name="success">#FF003632</color>
     <color name="info">#FF8294C4</color>
@@ -29,4 +30,10 @@
     <color name="purple_700">#FF3700B3</color>
     <color name="teal_200">#FF03DAC5</color>
     <color name="teal_700">#FF018786</color>
+    
+    <!-- Overlay colors -->
+    <color name="overlay_background">#80000000</color>
+    
+    <!-- Chip colors -->
+    <color name="chip_background">#FFE0E0E0</color>
 </resources>

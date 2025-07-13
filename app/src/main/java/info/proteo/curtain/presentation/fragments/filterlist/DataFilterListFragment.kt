@@ -195,7 +195,7 @@ class DataFilterListFragment : Fragment() {
 
                 // Adjust constraints when sync progress is shown/hidden
                 val params = recyclerView.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-                params.topToBottom = if (isSyncing) R.id.syncProgressLayout else R.id.categoryLayout
+                params.topToBottom = R.id.searchLayout  // Always position below search layout
                 recyclerView.layoutParams = params
             }
         }

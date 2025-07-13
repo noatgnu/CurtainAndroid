@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_view_details"
+        android:title="View Details"
+        android:icon="@drawable/ic_info" />
+    
+    <item
+        android:id="@+id/action_rename"
+        android:title="Rename"
+        android:icon="@drawable/ic_edit" />
+    
+    <item
+        android:id="@+id/action_change_color"
+        android:title="Change Color"
+        android:icon="@drawable/ic_color_palette" />
+    
+    <item
+        android:id="@+id/action_export"
+        android:title="Export as Filter List"
+        android:icon="@drawable/ic_export" />
+    
+    <item
+        android:id="@+id/action_delete"
+        android:title="Delete"
+        android:icon="@drawable/ic_delete" />
+</menu>

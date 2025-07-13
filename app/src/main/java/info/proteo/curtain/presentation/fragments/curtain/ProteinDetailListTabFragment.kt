@@ -17,6 +17,7 @@ import info.proteo.curtain.databinding.FragmentProteinDetailListTabBinding
 import info.proteo.curtain.databinding.ItemProteinDetailBinding
 import info.proteo.curtain.databinding.ItemSampleDataBinding
 import info.proteo.curtain.databinding.ItemConditionDataBinding
+import info.proteo.curtain.data.services.ConditionColorService
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import info.proteo.curtain.utils.PlotlyChartGenerator
 import kotlinx.coroutines.launch
@@ -29,14 +30,26 @@ import androidx.appcompat.app.AlertDialog
 import android.widget.Button
 import android.widget.TextView
 import info.proteo.curtain.R
+import info.proteo.curtain.utils.PlotlyChartGenerator.ChartType
+import info.proteo.curtain.data.services.SearchService
+import info.proteo.curtain.data.models.SearchList
+import dagger.hilt.android.AndroidEntryPoint
 import org.jetbrains.kotlinx.dataframe.api.getColumn
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class ProteinDetailListTabFragment : Fragment() {
     private var _binding: FragmentProteinDetailListTabBinding? = null
     private val binding get() = _binding!!
 
     private val viewModel: CurtainDetailsViewModel by activityViewModels()
     private lateinit var proteinDetailAdapter: ProteinDetailAdapter
+    
+    @Inject
+    lateinit var searchService: SearchService
+    
+    @Inject
+    lateinit var conditionColorService: ConditionColorService
     
     // Pagination constants and state
     companion object {
@@ -45,13 +58,14 @@ class ProteinDetailListTabFragment : Fragment() {
     }
     
     private var currentPage = 0
-    private var totalProteins = 0
     private var isLoading = false
     private var hasMoreData = true
     private var allSelectedProteins = listOf<String>()
     private val loadedProteinDetails = mutableListOf<ProteinDetail>()
     private var isImputationEnabled = false
     private var isPeptideCountEnabled = false
+    private var selectedChartType = ChartType.INDIVIDUAL_BAR
+    private var useSearchFilter = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -67,12 +81,16 @@ class ProteinDetailListTabFragment : Fragment() {
         
         setupRecyclerView()
         setupPaginationControls()
-        setupChartToggles()
+        setupChartControls()
+        setupSearchFilter()
+        observeSearchState()
         
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.isDataLoaded.collect { isDataLoaded ->
                     if (isDataLoaded && viewModel.curtainData.value != null) {
+                        initializeConditionColors()
+                        restoreStoredSearchLists()
                         loadProteinDetails()
                     }
                 }
@@ -86,7 +104,7 @@ class ProteinDetailListTabFragment : Fragment() {
         }
     }
     
-    private fun setupChartToggles() {
+    private fun setupChartControls() {
         // Initialize imputation toggle state from settings
         isImputationEnabled = viewModel.curtainSettings.value?.enableImputation ?: false
         binding.imputationToggle.isChecked = isImputationEnabled
@@ -107,6 +125,232 @@ class ProteinDetailListTabFragment : Fragment() {
             refreshAllCharts()
         }
     }
+    
+    
+    private fun setupSearchFilter() {
+        binding.searchFilterButton.setOnClickListener {
+            Log.d("ProteinDetailList", "Search filter button clicked")
+            showSearchFilterDialog()
+        }
+    }
+    
+    private fun observeSearchState() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            searchService.searchSession.collect { session ->
+                updateSearchFilterButton(session.searchLists, session.activeFilters)
+            }
+        }
+    }
+    
+    private fun updateSearchFilterButton(searchLists: List<SearchList>, activeFilters: Set<String>) {
+        val searchSession = searchService.searchSession.value
+        val activeSearchLists = searchLists.filter { it.id in activeFilters }
+        val totalActiveFilters = activeFilters.size + searchSession.activeStoredSelections.size
+        
+        binding.searchFilterButton.text = when {
+            totalActiveFilters == 0 -> "All Proteins"
+            totalActiveFilters == 1 && activeSearchLists.isNotEmpty() -> activeSearchLists.first().name
+            totalActiveFilters == 1 && searchSession.activeStoredSelections.isNotEmpty() -> searchSession.activeStoredSelections.first()
+            else -> "$totalActiveFilters Filters"
+        }
+        
+        val wasUsingFilter = useSearchFilter
+        useSearchFilter = totalActiveFilters > 0
+        
+        // Only refresh if filter state changed and we have data loaded
+        if (wasUsingFilter != useSearchFilter && (hasMoreData || loadedProteinDetails.isNotEmpty())) {
+            Log.d("ProteinDetailList", "Filter changed: wasUsingFilter=$wasUsingFilter, useSearchFilter=$useSearchFilter")
+            loadProteinDetails()
+        }
+    }
+    
+    private fun showSearchFilterDialog() {
+        Log.d("ProteinDetailList", "showSearchFilterDialog() called")
+        
+        // Get both search lists and all stored selection operations
+        val searchLists = searchService.getSearchLists()
+        val allStoredSelections = searchService.getAllStoredSelections()
+        
+        Log.d("ProteinDetailList", "Search lists count: ${searchLists.size}")
+        Log.d("ProteinDetailList", "Stored selections count: ${allStoredSelections.size}")
+        
+        if (searchLists.isEmpty() && allStoredSelections.isEmpty()) {
+            Log.d("ProteinDetailList", "No selections available, showing toast")
+            android.widget.Toast.makeText(
+                requireContext(), 
+                "No selection operations available. Operations are created through search lists or volcano plot selections.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        
+        // Create a combined list with categories
+        val filterOptions = mutableListOf<FilterOption>()
+        filterOptions.add(FilterOption("All Proteins", "", FilterOption.Type.ALL))
+        
+        // Add search lists (user-created)
+        if (searchLists.isNotEmpty()) {
+            filterOptions.add(FilterOption("── Search Lists ──", "", FilterOption.Type.HEADER))
+            searchLists.forEach { searchList ->
+                val proteinCount = searchList.proteinIds.size
+                filterOptions.add(FilterOption(
+                    name = "${searchList.name} ($proteinCount proteins)",
+                    id = searchList.id,
+                    type = FilterOption.Type.SEARCH_LIST
+                ))
+            }
+        }
+        
+        // Add stored selections (including volcano plot selections)
+        val storedOnlySelections = allStoredSelections.filterKeys { operationName ->
+            // Only show operations that aren't already in search lists
+            searchLists.none { it.name == operationName }
+        }
+        
+        if (storedOnlySelections.isNotEmpty()) {
+            filterOptions.add(FilterOption("── Stored Selections ──", "", FilterOption.Type.HEADER))
+            storedOnlySelections.forEach { (operationName, proteinIds) ->
+                filterOptions.add(FilterOption(
+                    name = "$operationName (${proteinIds.size} proteins)",
+                    id = operationName,
+                    type = FilterOption.Type.STORED_SELECTION
+                ))
+            }
+        }
+        
+        val listNames = filterOptions.map { it.name }.toTypedArray()
+        val searchSession = searchService.searchSession.value
+        val checkedItems = BooleanArray(filterOptions.size) { index ->
+            val option = filterOptions[index]
+            when (option.type) {
+                FilterOption.Type.ALL -> searchSession.activeFilters.isEmpty() && searchSession.activeStoredSelections.isEmpty()
+                FilterOption.Type.SEARCH_LIST -> option.id in searchSession.activeFilters
+                FilterOption.Type.STORED_SELECTION -> option.id in searchSession.activeStoredSelections
+                FilterOption.Type.HEADER -> false
+            }
+        }
+        
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle("Filter Protein Details")
+            .setMultiChoiceItems(listNames, checkedItems) { dialog, which, isChecked ->
+                val option = filterOptions[which]
+                if (option.type != FilterOption.Type.HEADER) {
+                    checkedItems[which] = isChecked
+                    
+                    // Handle mutual exclusivity between "All Proteins" and other options
+                    if (option.type == FilterOption.Type.ALL && isChecked) {
+                        // If "All Proteins" is checked, uncheck all other options
+                        for (i in checkedItems.indices) {
+                            if (i != which && filterOptions[i].type != FilterOption.Type.HEADER) {
+                                checkedItems[i] = false
+                            }
+                        }
+                        // Update the dialog to reflect changes
+                        (dialog as AlertDialog).listView.post {
+                            for (i in checkedItems.indices) {
+                                dialog.listView.setItemChecked(i, checkedItems[i])
+                            }
+                        }
+                    } else if (option.type != FilterOption.Type.ALL && isChecked) {
+                        // If any other option is checked, uncheck "All Proteins"
+                        val allProteinsIndex = filterOptions.indexOfFirst { it.type == FilterOption.Type.ALL }
+                        if (allProteinsIndex >= 0) {
+                            checkedItems[allProteinsIndex] = false
+                            // Update the dialog to reflect changes
+                            (dialog as AlertDialog).listView.post {
+                                dialog.listView.setItemChecked(allProteinsIndex, false)
+                            }
+                        }
+                    }
+                }
+            }
+            .setPositiveButton("Apply") { _, _ ->
+                applyAdvancedSearchFilter(filterOptions, checkedItems)
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+            
+        dialog.show()
+    }
+    
+    private data class FilterOption(
+        val name: String,
+        val id: String,
+        val type: Type
+    ) {
+        enum class Type {
+            ALL, SEARCH_LIST, STORED_SELECTION, HEADER
+        }
+    }
+    
+    private fun applyAdvancedSearchFilter(filterOptions: List<FilterOption>, checkedItems: BooleanArray) {
+        Log.d("ProteinDetailList", "applyAdvancedSearchFilter called")
+        
+        val selectedOptions = filterOptions.filterIndexed { index, option ->
+            checkedItems[index] && option.type != FilterOption.Type.HEADER
+        }
+        
+        Log.d("ProteinDetailList", "Selected options: ${selectedOptions.map { "${it.name} (${it.type})" }}")
+        
+        if (selectedOptions.any { it.type == FilterOption.Type.ALL }) {
+            // "All Proteins" selected - clear all filters
+            Log.d("ProteinDetailList", "Clearing all filters")
+            searchService.clearAllFilters()
+        } else {
+            // Apply selected search list filters
+            val selectedSearchListIds = selectedOptions
+                .filter { it.type == FilterOption.Type.SEARCH_LIST }
+                .map { it.id }
+            
+            // Apply selected stored selection filters
+            val selectedStoredSelectionNames = selectedOptions
+                .filter { it.type == FilterOption.Type.STORED_SELECTION }
+                .map { it.id }
+            
+            Log.d("ProteinDetailList", "Setting search list filters: $selectedSearchListIds")
+            Log.d("ProteinDetailList", "Setting stored selection filters: $selectedStoredSelectionNames")
+            
+            searchService.setSearchListFilters(selectedSearchListIds)
+            searchService.setStoredSelectionFilters(selectedStoredSelectionNames)
+        }
+    }
+    
+    private fun applySearchFilter(searchLists: List<SearchList>, checkedItems: BooleanArray) {
+        if (checkedItems[0]) {
+            // "All Proteins" selected - clear all filters
+            searchService.clearAllFilters()
+        } else {
+            // Apply selected search list filters
+            val selectedListIds = searchLists.filterIndexed { index, _ ->
+                checkedItems[index + 1]
+            }.map { it.id }
+            
+            searchService.setSearchListFilters(selectedListIds)
+        }
+    }
+    
+    private fun initializeConditionColors() {
+        // Import condition colors from curtain settings when data is loaded
+        viewModel.curtainSettings.value?.let { settings ->
+            conditionColorService.importFromCurtainSettings(
+                colorMap = settings.colorMap,
+                sampleMap = settings.sampleMap,
+                defaultColorList = settings.defaultColorList,
+                conditionOrder = settings.conditionOrder
+            )
+        }
+    }
+    
+    private fun restoreStoredSearchLists() {
+        // Restore search lists from stored CurtainDataService data
+        viewModel.curtainData.value?.let { curtainData ->
+            Log.d("ProteinDetailList", "Restoring search lists from curtain data")
+            Log.d("ProteinDetailList", "selectedMap size: ${curtainData.selectedMap.size}")
+            Log.d("ProteinDetailList", "selectOperationNames size: ${curtainData.selectOperationNames.size}")
+            searchService.restoreSearchListsFromCurtainData(curtainData)
+        } ?: Log.d("ProteinDetailList", "No curtain data available for restoring search lists")
+    }
+    
 
     private fun setupRecyclerView() {
         proteinDetailAdapter = ProteinDetailAdapter(
@@ -116,7 +360,8 @@ class ProteinDetailListTabFragment : Fragment() {
                     isEnabled = isImputationEnabled,
                     imputationMap = viewModel.curtainSettings.value?.imputationMap ?: mapOf(),
                     peptideCountData = viewModel.curtainSettings.value?.peptideCountData ?: mapOf(),
-                    viewPeptideCount = isPeptideCountEnabled
+                    viewPeptideCount = isPeptideCountEnabled,
+                    chartType = selectedChartType
                 )
             }
         )
@@ -154,8 +399,9 @@ class ProteinDetailListTabFragment : Fragment() {
     private fun updatePaginationInfo() {
         val loadedCount = loadedProteinDetails.size
         val totalCount = allSelectedProteins.size
+        val remainingCount = maxOf(0, totalCount - loadedCount)
         
-        Log.d("ProteinDetailList", "Pagination: $loadedCount/$totalCount proteins loaded, hasMore: $hasMoreData")
+        Log.d("ProteinDetailList", "Pagination: loaded=$loadedCount, total=$totalCount, remaining=$remainingCount, hasMore=$hasMoreData, useFilter=$useSearchFilter")
         
         // Update pagination info text
         binding.paginationInfo.apply {
@@ -163,14 +409,14 @@ class ProteinDetailListTabFragment : Fragment() {
             visibility = if (totalCount > 0) View.VISIBLE else View.GONE
         }
         
-        // Update load more button visibility
+        // Update load more button visibility and text
         binding.loadMoreLayout.visibility = if (hasMoreData && totalCount > 0) View.VISIBLE else View.GONE
-        binding.loadMoreButton.text = if (hasMoreData) {
-            "Load More Proteins (${totalCount - loadedCount} remaining)"
+        binding.loadMoreButton.text = if (hasMoreData && remainingCount > 0) {
+            "Load More Proteins ($remainingCount remaining)"
         } else {
             "All proteins loaded"
         }
-        binding.loadMoreButton.isEnabled = hasMoreData
+        binding.loadMoreButton.isEnabled = hasMoreData && remainingCount > 0
     }
 
     private fun loadProteinDetails() {
@@ -208,11 +454,10 @@ class ProteinDetailListTabFragment : Fragment() {
                     
                     // Store all selected proteins for pagination
                     allSelectedProteins = selectedProteins
-                    totalProteins = selectedProteins.size
                     
                     // Update loading message
                     withContext(Dispatchers.Main) {
-                        binding.loadingText.text = "Loading initial ${INITIAL_PAGE_SIZE} of ${totalProteins} proteins..."
+                        binding.loadingText.text = "Loading initial ${INITIAL_PAGE_SIZE} of ${selectedProteins.size} proteins..."
                     }
 
                     // Process only the first page
@@ -229,7 +474,7 @@ class ProteinDetailListTabFragment : Fragment() {
                     proteinDetailAdapter.updateColorMap(viewModel.curtainSettings.value?.colorMap ?: mapOf())
                     
                     // Check if there's more data
-                    hasMoreData = allSelectedProteins.size > INITIAL_PAGE_SIZE
+                    hasMoreData = loadedProteinDetails.size < allSelectedProteins.size
                     updatePaginationInfo()
                     
                     showContent()
@@ -293,18 +538,38 @@ class ProteinDetailListTabFragment : Fragment() {
     }
 
     private fun getSelectedProteins(curtainData: AppData): List<String> {
-        val selectedProteins = mutableListOf<String>()
+        // Apply search filter if enabled
+        return if (useSearchFilter) {
+            val filteredProteins = searchService.getFilteredProteinIds()
+            Log.d("ProteinDetailList", "Using search filter: ${filteredProteins.size} filtered proteins")
+            if (filteredProteins.isNotEmpty()) {
+                filteredProteins
+            } else {
+                // If no search filter results, show all proteins with any selection
+                val allProteins = getAllSelectedProteins(curtainData)
+                Log.d("ProteinDetailList", "Search filter returned empty, showing all ${allProteins.size} proteins")
+                allProteins
+            }
+        } else {
+            // Show all proteins with any selection
+            val allProteins = getAllSelectedProteins(curtainData)
+            Log.d("ProteinDetailList", "No search filter, showing all ${allProteins.size} proteins")
+            allProteins
+        }
+    }
+    
+    private fun getAllSelectedProteins(curtainData: AppData): List<String> {
+        val selectedProteins = mutableSetOf<String>()
         
-        // Get selected proteins from selectedMap
+        // Get all proteins that are selected in any operation
         curtainData.selectedMap.forEach { (proteinId, selections) ->
-            selections.forEach { (selectionName, isSelected) ->
-                if (isSelected) {
-                    selectedProteins.add(proteinId)
-                }
+            // Since selectedMap only contains true values, any protein in the map is selected
+            if (selections.isNotEmpty()) {
+                selectedProteins.add(proteinId)
             }
         }
         
-        return selectedProteins.distinct()
+        return selectedProteins.toList()
     }
 
     private suspend fun processProteinDetails(
@@ -441,11 +706,14 @@ class ProteinDetailListTabFragment : Fragment() {
             errorText.visibility = View.GONE
             noSelectionText.visibility = View.GONE
             
-            // Show chart controls if imputation data or peptide count data is available
+            // Show chart controls - always show to include search filter, hide specific toggles when not needed
             val hasImputationData = viewModel.curtainSettings.value?.imputationMap?.isNotEmpty() == true
             val hasPeptideCountData = viewModel.curtainSettings.value?.peptideCountData?.isNotEmpty() == true
             
-            chartControlsLayout.visibility = if (hasImputationData || hasPeptideCountData) View.VISIBLE else View.GONE
+            // Always show chart controls to include search filter
+            chartControlsLayout.visibility = View.VISIBLE
+            
+            // Show imputation and peptide count controls only when relevant
             imputationToggleLayout.visibility = if (hasImputationData) View.VISIBLE else View.GONE
             peptideCountToggleLayout.visibility = if (hasPeptideCountData) View.VISIBLE else View.GONE
         }
@@ -508,7 +776,8 @@ class ProteinDetailListTabFragment : Fragment() {
         val isEnabled: Boolean,
         val imputationMap: Map<String, Any>,
         val peptideCountData: Map<String, Any>,
-        val viewPeptideCount: Boolean
+        val viewPeptideCount: Boolean,
+        val chartType: ChartType
     )
 
     // Adapter classes
@@ -547,6 +816,10 @@ class ProteinDetailListTabFragment : Fragment() {
         class ProteinDetailViewHolder(private val binding: ItemProteinDetailBinding) : 
             RecyclerView.ViewHolder(binding.root) {
 
+            private var currentChartType = ChartType.INDIVIDUAL_BAR
+            private var currentErrorBarType = PlotlyChartGenerator.ErrorBarType.STANDARD_ERROR
+            private var showIndividualPoints = false
+
             fun bind(proteinDetail: ProteinDetail, colorMap: Map<String, String>, imputationSettings: ImputationSettings) {
                 binding.apply {
                     // Update main protein info
@@ -554,14 +827,142 @@ class ProteinDetailListTabFragment : Fragment() {
                     proteinId.text = "Protein ID: ${proteinDetail.proteinId}"
                     geneName.text = "Gene Name: ${proteinDetail.geneName}"
 
-                    // Setup chart WebView
-                    setupChartWebView(chartWebView, proteinDetail, colorMap, imputationSettings)
+                    // Setup condition colors preview
+                    setupConditionColorsPreview(proteinDetail, colorMap)
+
+                    // Setup protein menu button
+                    proteinMenuButton.setOnClickListener {
+                        showProteinOptionsDialog(proteinDetail, colorMap, imputationSettings)
+                    }
+
+                    // Setup chart WebView with current chart type
+                    refreshChart(proteinDetail, colorMap, imputationSettings)
 
                     // Setup raw data button
                     viewRawDataButton.setOnClickListener {
                         showRawDataDialog(proteinDetail)
                     }
                 }
+            }
+
+            private fun showProteinOptionsDialog(proteinDetail: ProteinDetail, colorMap: Map<String, String>, imputationSettings: ImputationSettings) {
+                val dialogView = LayoutInflater.from(itemView.context)
+                    .inflate(R.layout.dialog_protein_options, null)
+                
+                // Setup dialog views
+                val dialogTitle = dialogView.findViewById<android.widget.TextView>(R.id.dialogTitle)
+                val proteinInfo = dialogView.findViewById<android.widget.TextView>(R.id.proteinInfo)
+                val chartTypeChips = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.chartTypeChips)
+                val errorBarSection = dialogView.findViewById<android.widget.LinearLayout>(R.id.errorBarSection)
+                val errorBarChips = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.errorBarChips)
+                val pointsSection = dialogView.findViewById<android.widget.LinearLayout>(R.id.pointsSection)
+                val showPointsSwitch = dialogView.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.showPointsSwitch)
+                val cancelButton = dialogView.findViewById<android.widget.Button>(R.id.cancelButton)
+                val applyButton = dialogView.findViewById<android.widget.Button>(R.id.applyButton)
+                
+                // Set current values
+                dialogTitle.text = "Visualization Options"
+                proteinInfo.text = "${proteinDetail.geneName} (${proteinDetail.proteinId})"
+                
+                // Set current chart type
+                when (currentChartType) {
+                    ChartType.INDIVIDUAL_BAR -> chartTypeChips.check(R.id.chipIndividualBar)
+                    ChartType.AVERAGE_BAR -> chartTypeChips.check(R.id.chipAverageBar)
+                    ChartType.VIOLIN_PLOT -> chartTypeChips.check(R.id.chipViolin)
+                }
+                
+                // Set current error bar type
+                when (currentErrorBarType) {
+                    PlotlyChartGenerator.ErrorBarType.STANDARD_ERROR -> errorBarChips.check(R.id.chipStandardError)
+                    PlotlyChartGenerator.ErrorBarType.STANDARD_DEVIATION -> errorBarChips.check(R.id.chipStandardDev)
+                }
+                
+                showPointsSwitch.isChecked = showIndividualPoints
+                
+                // Handle chart type changes to show/hide options
+                fun updateOptionsVisibility() {
+                    val selectedChartType = when (chartTypeChips.checkedChipId) {
+                        R.id.chipAverageBar -> ChartType.AVERAGE_BAR
+                        R.id.chipViolin -> ChartType.VIOLIN_PLOT
+                        else -> ChartType.INDIVIDUAL_BAR
+                    }
+                    
+                    errorBarSection.visibility = if (selectedChartType == ChartType.AVERAGE_BAR) android.view.View.VISIBLE else android.view.View.GONE
+                    pointsSection.visibility = if (selectedChartType == ChartType.AVERAGE_BAR) android.view.View.VISIBLE else android.view.View.GONE
+                }
+                
+                chartTypeChips.setOnCheckedStateChangeListener { _, _ ->
+                    updateOptionsVisibility()
+                }
+                
+                updateOptionsVisibility()
+                
+                // Create and show dialog
+                val dialog = androidx.appcompat.app.AlertDialog.Builder(itemView.context)
+                    .setView(dialogView)
+                    .create()
+                
+                cancelButton.setOnClickListener {
+                    dialog.dismiss()
+                }
+                
+                applyButton.setOnClickListener {
+                    // Apply changes
+                    val newChartType = when (chartTypeChips.checkedChipId) {
+                        R.id.chipAverageBar -> ChartType.AVERAGE_BAR
+                        R.id.chipViolin -> ChartType.VIOLIN_PLOT
+                        else -> ChartType.INDIVIDUAL_BAR
+                    }
+                    
+                    val newErrorBarType = when (errorBarChips.checkedChipId) {
+                        R.id.chipStandardDev -> PlotlyChartGenerator.ErrorBarType.STANDARD_DEVIATION
+                        else -> PlotlyChartGenerator.ErrorBarType.STANDARD_ERROR
+                    }
+                    
+                    val newShowPoints = showPointsSwitch.isChecked
+                    
+                    // Update settings and refresh chart
+                    currentChartType = newChartType
+                    currentErrorBarType = newErrorBarType
+                    showIndividualPoints = newShowPoints
+                    
+                    refreshChart(proteinDetail, colorMap, imputationSettings)
+                    dialog.dismiss()
+                }
+                
+                dialog.show()
+            }
+            
+
+            private fun setupConditionColorsPreview(proteinDetail: ProteinDetail, colorMap: Map<String, String>) {
+                val conditions = proteinDetail.conditionDataList.map { it.condition }.distinct()
+                if (conditions.isNotEmpty()) {
+                    binding.conditionColorsPreview.visibility = View.VISIBLE
+                    
+                    val colorChipsAdapter = ConditionColorChipsAdapter(conditions, colorMap) { condition ->
+                        // Condition color management is now in the overflow menu
+                        android.widget.Toast.makeText(
+                            itemView.context,
+                            "Use the overflow menu in the toolbar to manage condition colors",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    
+                    binding.conditionColorsRecyclerView.apply {
+                        layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
+                            context, 
+                            androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL, 
+                            false
+                        )
+                        adapter = colorChipsAdapter
+                    }
+                } else {
+                    binding.conditionColorsPreview.visibility = View.GONE
+                }
+            }
+
+            private fun refreshChart(proteinDetail: ProteinDetail, colorMap: Map<String, String>, imputationSettings: ImputationSettings) {
+                setupChartWebView(binding.chartWebView, proteinDetail, colorMap, imputationSettings.copy(chartType = currentChartType))
             }
             
             private fun showRawDataDialog(proteinDetail: ProteinDetail) {
@@ -578,7 +979,7 @@ class ProteinDetailListTabFragment : Fragment() {
                 proteinInfo.text = "${proteinDetail.geneName} (${proteinDetail.proteinId})"
                 
                 // Setup RecyclerView in dialog
-                val conditionAdapter = ConditionDataAdapter()
+                val conditionAdapter = ConditionDataAdapter(null)
                 conditionsRecyclerView.apply {
                     layoutManager = LinearLayoutManager(context)
                     adapter = conditionAdapter
@@ -633,7 +1034,12 @@ class ProteinDetailListTabFragment : Fragment() {
                             peptideCountData = imputationSettings.peptideCountData as? Map<String, Map<String, String>>,
                             imputationMap = imputationSettings.imputationMap as? Map<String, Map<String, Boolean>>,
                             viewPeptideCount = imputationSettings.viewPeptideCount,
-                            enableImputation = imputationSettings.isEnabled
+                            enableImputation = imputationSettings.isEnabled,
+                            chartType = imputationSettings.chartType,
+                            conditionColorService = null,
+                            errorBarType = currentErrorBarType,
+                            showIndividualPoints = showIndividualPoints,
+                            violinPointPosition = -1.2
                         )
                         
                         loadDataWithBaseURL("file:///android_asset/", chartHtml, "text/html", "UTF-8", null)
@@ -647,7 +1053,9 @@ class ProteinDetailListTabFragment : Fragment() {
         }
     }
 
-    class ConditionDataAdapter : RecyclerView.Adapter<ConditionDataAdapter.ConditionDataViewHolder>() {
+    class ConditionDataAdapter(
+        private val onColorClick: ((String, String) -> Unit)? = null
+    ) : RecyclerView.Adapter<ConditionDataAdapter.ConditionDataViewHolder>() {
         private var conditionData = listOf<ConditionData>()
 
         fun submitList(data: List<ConditionData>) {
@@ -668,12 +1076,26 @@ class ProteinDetailListTabFragment : Fragment() {
 
         override fun getItemCount(): Int = conditionData.size
 
-        class ConditionDataViewHolder(private val binding: ItemConditionDataBinding) : 
+        inner class ConditionDataViewHolder(private val binding: ItemConditionDataBinding) : 
             RecyclerView.ViewHolder(binding.root) {
 
             fun bind(conditionData: ConditionData) {
                 binding.apply {
                     conditionName.text = conditionData.condition
+
+                    // Set condition color indicator
+                    val conditionColor = "#808080" // Default gray color
+                    try {
+                        val colorInt = android.graphics.Color.parseColor(conditionColor)
+                        conditionColorIndicator.setCardBackgroundColor(colorInt)
+                    } catch (e: Exception) {
+                        conditionColorIndicator.setCardBackgroundColor(android.graphics.Color.GRAY)
+                    }
+
+                    // Set color indicator click listener
+                    conditionColorIndicator.setOnClickListener {
+                        // Color picker functionality disabled in this context
+                    }
 
                     // Setup sample data RecyclerView
                     val sampleAdapter = SampleDataAdapter()
@@ -715,6 +1137,48 @@ class ProteinDetailListTabFragment : Fragment() {
                 binding.apply {
                     sampleName.text = sampleData.sampleName
                     sampleValue.text = sampleData.value
+                }
+            }
+        }
+    }
+
+    // Simple adapter for condition color chips
+    class ConditionColorChipsAdapter(
+        private val conditions: List<String>,
+        private val colorMap: Map<String, String>,
+        private val onColorClick: (String) -> Unit
+    ) : RecyclerView.Adapter<ConditionColorChipsAdapter.ColorChipViewHolder>() {
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ColorChipViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_condition_color_chip, parent, false)
+            return ColorChipViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ColorChipViewHolder, position: Int) {
+            val condition = conditions[position]
+            val color = colorMap[condition] ?: "#fd7f6f"
+            holder.bind(condition, color, onColorClick)
+        }
+
+        override fun getItemCount(): Int = conditions.size
+
+        class ColorChipViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            private val colorIndicator: androidx.cardview.widget.CardView = itemView.findViewById(R.id.colorIndicator)
+            private val conditionName: android.widget.TextView = itemView.findViewById(R.id.conditionName)
+
+            fun bind(condition: String, color: String, onColorClick: (String) -> Unit) {
+                conditionName.text = condition
+                
+                try {
+                    val colorInt = android.graphics.Color.parseColor(color)
+                    colorIndicator.setCardBackgroundColor(colorInt)
+                } catch (e: Exception) {
+                    colorIndicator.setCardBackgroundColor(android.graphics.Color.GRAY)
+                }
+                
+                itemView.setOnClickListener {
+                    onColorClick(condition)
                 }
             }
         }

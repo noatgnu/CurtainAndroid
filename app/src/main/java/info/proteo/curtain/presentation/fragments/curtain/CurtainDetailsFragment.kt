@@ -3,6 +3,9 @@ package info.proteo.curtain.presentation.fragments.curtain
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
@@ -20,9 +23,15 @@ import info.proteo.curtain.databinding.FragmentCurtainDetailsBinding
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import info.proteo.curtain.presentation.adapters.CurtainDetailsPagerAdapter
 import info.proteo.curtain.presentation.fragments.curtain.CurtainDetailsFragmentArgs
+import info.proteo.curtain.presentation.dialogs.CurtainSettingsManagerDialog
+import info.proteo.curtain.presentation.dialogs.ConditionColorManagementDialog
+import info.proteo.curtain.presentation.dialogs.ProteinSearchDialog
+import info.proteo.curtain.data.services.SearchService
+import info.proteo.curtain.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class CurtainDetailsFragment : Fragment() {
@@ -36,6 +45,9 @@ class CurtainDetailsFragment : Fragment() {
     // Access to the ViewModel
     private val viewModel: CurtainDetailsViewModel by activityViewModels()
     private lateinit var pagerAdapter: CurtainDetailsPagerAdapter
+    
+    @Inject
+    lateinit var searchService: SearchService
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -44,6 +56,11 @@ class CurtainDetailsFragment : Fragment() {
     ): View {
         _binding = FragmentCurtainDetailsBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -108,6 +125,60 @@ class CurtainDetailsFragment : Fragment() {
             loadingTextView.visibility = if (isLoading) View.VISIBLE else View.GONE
             contentLayout.visibility = if (isLoading) View.GONE else View.VISIBLE
         }
+    }
+    
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        inflater.inflate(R.menu.curtain_settings_menu, menu)
+        super.onCreateOptionsMenu(menu, inflater)
+    }
+    
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_manage_settings -> {
+                showSettingsManagerDialog()
+                true
+            }
+            R.id.action_save_current_settings -> {
+                showSettingsManagerDialog(showSaveTab = true)
+                true
+            }
+            R.id.action_load_settings -> {
+                showSettingsManagerDialog(showSaveTab = false)
+                true
+            }
+            R.id.action_condition_colors -> {
+                showConditionColorsDialog()
+                true
+            }
+            R.id.action_protein_search -> {
+                showProteinSearchDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+    
+    private fun showSettingsManagerDialog(showSaveTab: Boolean = false) {
+        val dialog = CurtainSettingsManagerDialog.newInstance(args.curtainId)
+        if (showSaveTab) {
+            // Set arguments to show save tab initially
+            val bundle = dialog.arguments ?: Bundle()
+            bundle.putBoolean("showSaveTab", true)
+            dialog.arguments = bundle
+        }
+        dialog.show(childFragmentManager, "SettingsManagerDialog")
+    }
+    
+    private fun showConditionColorsDialog() {
+        // Show condition color management dialog
+        val dialog = ConditionColorManagementDialog.newInstance()
+        dialog.show(childFragmentManager, "ConditionColorsDialog")
+    }
+    
+    private fun showProteinSearchDialog() {
+        // Show protein search dialog
+        val dialog = ProteinSearchDialog.newInstance()
+        dialog.show(childFragmentManager, "ProteinSearchDialog")
     }
 
     override fun onDestroyView() {

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="4dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/colorCircle"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="1dp"
+        app:cardBackgroundColor="@color/primary"
+        tools:cardBackgroundColor="#fd7f6f" />
+
+    <TextView
+        android:id="@+id/colorIndex"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textSize="8sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:visibility="gone"
+        tools:text="1"
+        tools:visibility="visible" />
+
+</LinearLayout>

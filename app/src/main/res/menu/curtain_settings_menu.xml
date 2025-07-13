@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    
+    <item
+        android:id="@+id/action_manage_settings"
+        android:title="Manage Settings"
+        android:icon="@drawable/ic_settings_variant"
+        app:showAsAction="ifRoom" />
+    
+    <item
+        android:id="@+id/action_save_current_settings"
+        android:title="Save Current Settings"
+        android:icon="@drawable/ic_save"
+        app:showAsAction="never" />
+    
+    <item
+        android:id="@+id/action_load_settings"
+        android:title="Load Settings"
+        android:icon="@drawable/ic_file_download"
+        app:showAsAction="never" />
+    
+    <item
+        android:id="@+id/action_condition_colors"
+        android:title="Condition Colors"
+        android:icon="@drawable/ic_palette"
+        app:showAsAction="never" />
+    
+    <item
+        android:id="@+id/action_protein_search"
+        android:title="Protein Search"
+        android:icon="@drawable/ic_search"
+        app:showAsAction="never" />
+        
+</menu>

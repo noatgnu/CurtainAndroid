@@ -13,15 +13,33 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <TextView
-            android:id="@+id/conditionTitle"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textStyle="bold"
-            android:textSize="18sp"
-            android:textColor="?android:attr/textColorPrimary"
-            android:layout_marginBottom="8dp"
-            android:text="Protein Details" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:id="@+id/conditionTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:textColor="?android:attr/textColorPrimary"
+                android:text="Protein Details" />
+
+            <ImageButton
+                android:id="@+id/proteinMenuButton"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_more_vert"
+                android:contentDescription="Protein options"
+                android:scaleType="centerInside" />
+
+        </LinearLayout>
 
         <TextView
             android:id="@+id/proteinId"
@@ -40,6 +58,32 @@
             android:textColor="?android:attr/textColorSecondary"
             android:layout_marginBottom="8dp"
             android:text="Gene Name: " />
+
+
+        <!-- Condition Colors Preview -->
+        <LinearLayout
+            android:id="@+id/conditionColorsPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Condition Colors:"
+                android:textSize="12sp"
+                android:textColor="?android:attr/textColorSecondary"
+                android:layout_marginBottom="4dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/conditionColorsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+
+        </LinearLayout>
 
         <android.webkit.WebView
             android:id="@+id/chartWebView"

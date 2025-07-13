@@ -307,8 +307,8 @@ class CurtainDataService {
                 return result
             }
             else -> {
-                Log.w("CurtainDataService", "No valid value array found, returning empty map")
-                return mutableMapOf()
+                Log.w("CurtainDataService", "No valid value array found, returning the full map or empty map")
+                return data as MutableMap<String, Any>? ?: mutableMapOf()
             }
         }
     }

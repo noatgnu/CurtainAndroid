@@ -11,6 +11,8 @@ import info.proteo.curtain.CurtainDataService
 import info.proteo.curtain.CurtainSettings
 import info.proteo.curtain.UniprotData
 import info.proteo.curtain.UniprotService
+import info.proteo.curtain.data.local.database.entities.CurtainEntity
+import info.proteo.curtain.data.services.SearchService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,39 +29,37 @@ import javax.inject.Inject
 class CurtainDetailsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val curtainDao: CurtainDao,
-
 ) : ViewModel() {
 
     // Get the curtain ID from navigation arguments
     private val curtainId: String = savedStateHandle.get<String>("curtainId") ?: ""
 
     // Expose necessary data as StateFlows
+    private val _curtainEntity = MutableStateFlow<CurtainEntity?>(null)
+    val curtainEntity: StateFlow<CurtainEntity?> = _curtainEntity.asStateFlow()
+    
     private val _curtainData = MutableStateFlow<AppData?>(null)
     val curtainData: StateFlow<AppData?> = _curtainData.asStateFlow()
-
-    private val _uniprotData = MutableStateFlow<UniprotData?>(null)
-    val uniprotData: StateFlow<UniprotData?> = _uniprotData.asStateFlow()
-
-    private val _isDataLoaded = MutableStateFlow(false)
-    val isDataLoaded: StateFlow<Boolean> = _isDataLoaded.asStateFlow()
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     private val _curtainSettings = MutableStateFlow<CurtainSettings?>(null)
     val curtainSettings: StateFlow<CurtainSettings?> = _curtainSettings.asStateFlow()
 
-    var curtainDataService: CurtainDataService
+    private val _isDataLoaded = MutableStateFlow(false)
+    val isDataLoaded: StateFlow<Boolean> = _isDataLoaded.asStateFlow()
 
+    var curtainDataService: CurtainDataService
     var uniprotService: UniprotService
+
 
     init {
         curtainDataService = CurtainDataService()
         uniprotService = UniprotService()
-
     }
 
     /**
@@ -67,16 +67,16 @@ class CurtainDetailsViewModel @Inject constructor(
      */
     fun loadCurtainData(id: String) {
         // Reset states when loading new data
-        _isDataLoaded.value = false
-        _error.value = null
         _curtainData.value = null
-        _uniprotData.value = null
+        _error.value = null
         _isLoading.value = true
+        _isDataLoaded.value = false
 
         viewModelScope.launch {
             try {
                 // Get the curtain entity from the database
                 val curtain = curtainDao.getById(id)
+                _curtainEntity.value = curtain
 
                 if (curtain != null && curtain.file != null) {
                     // Deserialize the curtain file
@@ -101,6 +101,7 @@ class CurtainDetailsViewModel @Inject constructor(
                 val file = File(filePath)
                 if (!file.exists()) {
                     _error.value = "File not found: $filePath"
+                    _isLoading.value = false
                     return@launch
                 }
 
@@ -114,19 +115,19 @@ class CurtainDetailsViewModel @Inject constructor(
 
                 // Get the deserialized data
                 _curtainData.value = curtainDataService.curtainData
-                _uniprotData.value = curtainDataService.uniprotData
-                _curtainSettings.value = curtainDataService.curtainSettings
                 uniprotService.results = curtainDataService.uniprotData.results.toMutableMap()
                 uniprotService.dataMap = curtainDataService.uniprotData.dataMap.toMutableMap()
                 uniprotService.accMap = curtainDataService.uniprotData.accMap.toMutableMap()
                 uniprotService.db = curtainDataService.uniprotData.db
                 uniprotService.geneNameToAcc = curtainDataService.uniprotData.geneNameToAcc
-                Log.d("CurtainDetailsViewModel", "Uniprot data loaded: ${_uniprotData.value?.results?.size} entries")
-                Log.d("CurtainDetailsViewModel", "Uniprot db loaded: ${uniprotService.db.size} entries")
 
+
+                _curtainSettings.value = curtainDataService.curtainSettings
+                _isLoading.value = false
                 _isDataLoaded.value = true
             } catch (e: Exception) {
                 _error.value = "Error deserializing file: ${e.message}"
+                _isLoading.value = false
             }
         }
     }
@@ -139,8 +140,6 @@ class CurtainDetailsViewModel @Inject constructor(
 
                 // Also clear local references
                 _curtainData.value = null
-                _uniprotData.value = null
-                _isDataLoaded.value = false
             } catch (e: Exception) {
                 Log.e("CurtainDetailsViewModel", "Error clearing memory: ${e.message}", e)
             }
