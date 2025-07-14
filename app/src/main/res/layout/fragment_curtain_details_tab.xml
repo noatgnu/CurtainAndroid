@@ -17,6 +17,7 @@
             android:text="Curtain Details"
             android:textSize="24sp"
             android:textStyle="bold"
+            android:textColor="?android:textColorPrimary"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
@@ -43,7 +44,8 @@
                     android:layout_height="wrap_content"
                     android:text="Sample Information"
                     android:textSize="18sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:textColor="?android:textColorPrimary" />
 
                 <TextView
                     android:id="@+id/dataInfoTextView"
@@ -51,6 +53,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:textSize="16sp"
+                    android:textColor="?android:textColor"
                     tools:text="Samples: sample1, sample2, sample3" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -77,7 +80,8 @@
                     android:layout_height="wrap_content"
                     android:text="Dataframe Statistics"
                     android:textSize="18sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:textColor="?android:textColorPrimary" />
 
                 <TextView
                     android:id="@+id/dataframeInfoTextView"
@@ -85,6 +89,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:textSize="16sp"
+                    android:textColor="?android:textColor"
                     tools:text="Raw data rows: 1000\nDifferential data rows: 500" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -111,7 +116,8 @@
                     android:layout_height="wrap_content"
                     android:text="UniProt Status"
                     android:textSize="18sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:textColor="?android:textColorPrimary" />
 
                 <TextView
                     android:id="@+id/uniprotStatusTextView"
@@ -119,6 +125,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:textSize="16sp"
+                    android:textColor="?android:textColor"
                     tools:text="UniProt data loaded" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -146,7 +153,8 @@
                     android:layout_height="wrap_content"
                     android:text="Differential Form Parameters"
                     android:textSize="18sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:textColor="?android:textColorPrimary" />
 
                 <TextView
                     android:id="@+id/differentialFormTextView"
@@ -154,6 +162,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:textSize="16sp"
+                    android:textColor="?android:textColor"
                     tools:text="Primary IDs: id\nFold Change: log2fc\nSignificance: padj" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>

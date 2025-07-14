@@ -11,12 +11,14 @@
         android:layout_height="?attr/actionBarSize"
         android:background="?attr/colorPrimary"
         android:elevation="4dp"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel"
-        app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
+        app:titleTextColor="@color/white"
+        app:subtitleTextColor="@color/white"
+        app:navigationIconTint="@color/white"
+        app:popupTheme="@style/ThemeOverlay.MaterialComponents" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchLayout"

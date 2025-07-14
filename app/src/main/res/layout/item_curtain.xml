@@ -31,10 +31,12 @@
             android:id="@+id/tvDescription"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="2"
-            android:textColor="?android:attr/textColorSecondary"
+            android:textColor="?android:textColor"
+            android:textSize="14sp"
+            android:lineSpacingExtra="2dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvLinkId"
@@ -52,6 +54,7 @@
             android:textSize="12sp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvDescription"
+            app:layout_goneMarginTop="16dp"
             tools:text="TP" />
 
         <TextView
@@ -64,6 +67,7 @@
             android:textColor="?android:attr/textColorSecondary"
             app:layout_constraintStart_toEndOf="@+id/tvType"
             app:layout_constraintTop_toBottomOf="@+id/tvDescription"
+            app:layout_goneMarginTop="16dp"
             app:layout_constraintBottom_toBottomOf="@+id/tvType"
             tools:text="File size: 1.2 MB" />
 
@@ -77,6 +81,7 @@
             android:padding="8dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tvDescription"
+            app:layout_goneMarginTop="16dp"
             app:layout_constraintBottom_toBottomOf="@+id/tvType">
 
             <ImageView

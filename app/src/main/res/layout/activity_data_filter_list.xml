@@ -22,8 +22,10 @@
             android:layout_height="?attr/actionBarSize"
             android:background="?attr/colorPrimary"
             app:title="Data Filter Lists"
-            app:titleTextColor="?attr/colorOnPrimary"
-            app:navigationIconTint="?attr/colorOnPrimary" />
+            app:titleTextColor="@color/white"
+            app:subtitleTextColor="@color/white"
+            app:navigationIconTint="@color/white"
+            app:popupTheme="@style/ThemeOverlay.MaterialComponents" />
 
     </com.google.android.material.appbar.AppBarLayout>
 

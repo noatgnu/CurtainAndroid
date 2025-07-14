@@ -137,9 +137,10 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         // Example curtain parameters
         val exampleUniqueId = "f4b009f3-ac3c-470a-a68b-55fcadf68d0f"
         val exampleApiUrl = "https://celsus.muttsu.xyz/"
+        val exampleFrontendUrl = "https://curtain.proteo.info/"
 
         // Load the example curtain
-        loadCurtain(exampleUniqueId, exampleApiUrl)
+        loadCurtain(exampleUniqueId, exampleApiUrl, exampleFrontendUrl)
     }
 
     override fun onNewIntent(intent: Intent) {

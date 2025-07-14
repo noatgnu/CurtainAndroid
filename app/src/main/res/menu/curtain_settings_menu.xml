@@ -31,5 +31,11 @@
         android:title="Protein Search"
         android:icon="@drawable/ic_search"
         app:showAsAction="never" />
+    
+    <item
+        android:id="@+id/action_share_qr_code"
+        android:title="Share QR Code"
+        android:icon="@drawable/ic_share"
+        app:showAsAction="ifRoom" />
         
 </menu>

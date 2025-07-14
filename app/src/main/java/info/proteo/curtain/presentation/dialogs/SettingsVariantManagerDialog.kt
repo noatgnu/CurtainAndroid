@@ -31,6 +31,9 @@ class SettingsVariantManagerDialog : DialogFragment() {
 
     @Inject
     lateinit var settingsVariantService: SettingsVariantService
+    
+    @Inject
+    lateinit var curtainDataService: info.proteo.curtain.CurtainDataService
 
     private var _binding: DialogSettingsVariantManagerBinding? = null
     private val binding get() = _binding!!
@@ -371,6 +374,7 @@ class SettingsVariantManagerDialog : DialogFragment() {
             try {
                 val result = settingsVariantService.createVariantFromCurrentState(
                     name = name,
+                    curtainDataService = curtainDataService,
                     description = description,
                     tags = tags,
                     includeCategories = categories
@@ -431,12 +435,39 @@ class SettingsVariantManagerDialog : DialogFragment() {
             .setMessage("Are you sure you want to delete ${selectedVariants.size} variant(s)? This action cannot be undone.")
             .setPositiveButton("Delete") { _, _ ->
                 lifecycleScope.launch {
-                    selectedVariants.forEach { variantId ->
-                        settingsVariantService.deleteVariant(variantId)
+                    try {
+                        var successCount = 0
+                        var failCount = 0
+                        
+                        selectedVariants.forEach { variantId ->
+                            val result = settingsVariantService.deleteVariant(variantId)
+                            if (result.isSuccess) {
+                                successCount++
+                            } else {
+                                failCount++
+                            }
+                        }
+                        
+                        selectedVariants.clear()
+                        updateBulkActionsVisibility()
+                        
+                        val message = if (failCount == 0) {
+                            "$successCount variant(s) deleted successfully"
+                        } else {
+                            "$successCount variant(s) deleted, $failCount failed"
+                        }
+                        
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        
+                        // Variants list will refresh automatically through observer
+                        
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            "Error during bulk deletion: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
-                    selectedVariants.clear()
-                    updateBulkActionsVisibility()
-                    Toast.makeText(context, "Variants deleted successfully", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -554,8 +585,25 @@ class SettingsVariantManagerDialog : DialogFragment() {
             .setMessage("Are you sure you want to delete '${variant.name}'? This action cannot be undone.")
             .setPositiveButton("Delete") { _, _ ->
                 lifecycleScope.launch {
-                    settingsVariantService.deleteVariant(variant.id)
-                    Toast.makeText(context, "Variant deleted successfully", Toast.LENGTH_SHORT).show()
+                    try {
+                        val result = settingsVariantService.deleteVariant(variant.id)
+                        if (result.isSuccess) {
+                            Toast.makeText(context, "Variant '${variant.name}' deleted successfully", Toast.LENGTH_SHORT).show()
+                            // Variants list will refresh automatically through observer
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Failed to delete variant: ${result.exceptionOrNull()?.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            context,
+                            "Error deleting variant: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             }
             .setNegativeButton("Cancel", null)

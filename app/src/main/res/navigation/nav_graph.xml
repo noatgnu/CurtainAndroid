@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/curtainListFragment"
-        android:name="info.proteo.curtain.CurtainListFragment"
+        android:name="info.proteo.curtain.presentation.fragments.curtain.CurtainListFragment"
         android:label="Curtain List"
         tools:layout="@layout/fragment_curtain_list">
         <action
@@ -31,7 +31,7 @@
 
     <activity
         android:id="@+id/dataFilterListActivity"
-        android:name="info.proteo.curtain.DataFilterListActivity"
+        android:name="info.proteo.curtain.presentation.activities.DataFilterListActivity"
         android:label="Data Filter Lists"
         tools:layout="@layout/activity_data_filter_list" />
 

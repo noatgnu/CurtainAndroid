@@ -19,10 +19,10 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
         <!-- Text colors for dark mode -->
-        <item name="android:textColorPrimary">@color/white</item>
-        <item name="android:textColorSecondary">@color/on_surface_variant_dark</item>
+        <item name="android:textColorPrimary">@color/text_primary_dark</item>
+        <item name="android:textColorSecondary">@color/text_secondary_dark</item>
         <!-- TextView default text color -->
-        <item name="android:textColor">@color/white</item>
+        <item name="android:textColor">@color/text_body_dark</item>
         <!-- Fix inverse text colors for dark mode -->
         <item name="android:textColorPrimaryInverse">@color/white</item>
         <item name="android:textColorSecondaryInverse">@color/white</item>
@@ -67,8 +67,8 @@
 
     <!-- TabLayout tab style for dark mode -->
     <style name="Widget.Curtain.TabLayout.Tab" parent="Widget.MaterialComponents.TabLayout">
-        <item name="tabTextColor">@color/on_surface_variant_dark</item>
-        <item name="tabSelectedTextColor">@color/white</item>
+        <item name="tabTextColor">@color/text_secondary_dark</item>
+        <item name="tabSelectedTextColor">@color/text_primary_dark</item>
         <item name="tabIndicatorColor">@color/primary</item>
         <item name="tabRippleColor">@color/primary</item>
     </style>

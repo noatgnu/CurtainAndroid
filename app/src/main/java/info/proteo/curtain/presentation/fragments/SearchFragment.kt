@@ -36,6 +36,15 @@ import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 
+// Wrapper class for filter lists with category information
+data class FilterListWithCategory(
+    val id: Int,
+    val name: String,
+    val data: String,
+    val category: String,
+    val isDefault: Boolean
+)
+
 @AndroidEntryPoint
 class SearchFragment : Fragment() {
 
@@ -51,7 +60,7 @@ class SearchFragment : Fragment() {
 
     private var typeaheadJob: Job? = null
     private var currentSearchType = SearchType.PRIMARY_ID
-    private var availableFilterLists = listOf<DataFilterList>()
+    private var availableFilterLists = listOf<FilterListWithCategory>()
     private var selectedCategory = "All"
 
     override fun onCreateView(
@@ -315,7 +324,19 @@ class SearchFragment : Fragment() {
 
     private fun loadFilterLists() {
         viewLifecycleOwner.lifecycleScope.launch {
-            availableFilterLists = searchService.getAvailableFilterLists()
+            // Get filter lists with categories from SearchService
+            val filterListsByCategory = searchService.getFilterListsByCategory()
+            availableFilterLists = filterListsByCategory.flatMap { (category, filterLists) ->
+                filterLists.map { filterList ->
+                    FilterListWithCategory(
+                        id = filterList.id,
+                        name = filterList.name,
+                        data = filterList.data,
+                        category = category,
+                        isDefault = filterList.isDefault
+                    )
+                }
+            }
             updateCategorySpinner()
             filterFilterLists()
         }
@@ -361,7 +382,7 @@ class SearchFragment : Fragment() {
         }
     }
     
-    private fun importFilterList(filterList: DataFilterList) {
+    private fun importFilterList(filterList: FilterListWithCategory) {
         val curtainData = viewModel.curtainData.value
         if (curtainData == null) {
             showSnackbar("No data loaded")
@@ -599,12 +620,12 @@ class SearchListAdapter(
 }
 
 class FilterListImportAdapter(
-    private val onImport: (DataFilterList) -> Unit
+    private val onImport: (FilterListWithCategory) -> Unit
 ) : RecyclerView.Adapter<FilterListImportAdapter.FilterListViewHolder>() {
 
-    private var filterLists = listOf<DataFilterList>()
+    private var filterLists = listOf<FilterListWithCategory>()
 
-    fun submitList(lists: List<DataFilterList>) {
+    fun submitList(lists: List<FilterListWithCategory>) {
         filterLists = lists
         notifyDataSetChanged()
     }
@@ -626,7 +647,7 @@ class FilterListImportAdapter(
         private val binding: ItemFilterListImportBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(filterList: DataFilterList) {
+        fun bind(filterList: FilterListWithCategory) {
             binding.apply {
                 filterListName.text = filterList.name
                 categoryChip.text = filterList.category

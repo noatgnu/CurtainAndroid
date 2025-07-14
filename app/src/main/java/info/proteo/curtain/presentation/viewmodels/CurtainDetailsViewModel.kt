@@ -47,6 +47,10 @@ class CurtainDetailsViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    
+    // Event to trigger volcano plot refresh directly
+    private val _volcanoPlotRefreshTrigger = MutableStateFlow(0)
+    val volcanoPlotRefreshTrigger: StateFlow<Int> = _volcanoPlotRefreshTrigger.asStateFlow()
 
     private val _curtainSettings = MutableStateFlow<CurtainSettings?>(null)
     val curtainSettings: StateFlow<CurtainSettings?> = _curtainSettings.asStateFlow()
@@ -151,5 +155,55 @@ class CurtainDetailsViewModel @Inject constructor(
 
     fun updateCurtainSettings(settings: CurtainSettings) {
         _curtainSettings.value = settings
+    }
+    
+    /**
+     * Refreshes the UI after settings have been updated externally (e.g., from settings variant loading)
+     * This triggers re-emission of StateFlows to notify observing UI components
+     */
+    fun refreshFromSettingsUpdate() {
+        viewModelScope.launch {
+            try {
+                // Re-emit current data to trigger UI updates
+                val currentData = _curtainData.value
+                if (currentData != null) {
+                    // Trigger re-emission by setting to null then back to current value
+                    _curtainData.value = null
+                    _curtainData.value = currentData
+                }
+                
+                // Update settings from the service
+                _curtainSettings.value = curtainDataService.curtainSettings
+                
+                Log.d("CurtainDetailsViewModel", "Settings refresh triggered")
+            } catch (e: Exception) {
+                Log.e("CurtainDetailsViewModel", "Error refreshing after settings update", e)
+            }
+        }
+    }
+    
+    /**
+     * Refreshes the curtain data after search operations have been performed
+     * This forces StateFlow re-emission to notify observers of search selection changes
+     */
+    fun refreshFromSearchUpdate() {
+        viewModelScope.launch {
+            try {
+                val currentData = _curtainData.value
+                if (currentData != null) {
+                    // Update search selections in the AppData
+                    searchService.saveSearchListsToCurtainData(currentData)
+                    
+                    // Force StateFlow re-emission to trigger observers
+                    _curtainData.value = null
+                    _curtainData.value = currentData
+                    
+                    // Also trigger the direct volcano plot refresh
+                    _volcanoPlotRefreshTrigger.value = _volcanoPlotRefreshTrigger.value + 1
+                }
+            } catch (e: Exception) {
+                Log.e("CurtainDetailsViewModel", "Error refreshing after search update", e)
+            }
+        }
     }
 }

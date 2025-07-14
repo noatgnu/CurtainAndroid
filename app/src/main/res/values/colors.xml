@@ -22,7 +22,7 @@
     <color name="surface_light">#FFFFFFFF</color>
     <color name="surface_variant_light">#FFF8F9FA</color>
     <color name="on_surface_light">#FF212529</color>
-    <color name="on_surface_variant_light">#FFA4A4A4</color>
+    <color name="on_surface_variant_light">#FF6C757D</color>
     
     <!-- Legacy purple colors (keeping for compatibility) -->
     <color name="purple_200">#FFBB86FC</color>
@@ -36,4 +36,9 @@
     
     <!-- Chip colors -->
     <color name="chip_background">#FFE0E0E0</color>
+    
+    <!-- Text colors for better readability -->
+    <color name="text_primary_light">#FF212529</color>
+    <color name="text_secondary_light">#FF495057</color>
+    <color name="text_body_light">#FF343A40</color>
 </resources>

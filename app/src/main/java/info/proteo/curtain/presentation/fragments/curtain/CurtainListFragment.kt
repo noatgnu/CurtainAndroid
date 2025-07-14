@@ -1,4 +1,4 @@
-package info.proteo.curtain
+package info.proteo.curtain.presentation.fragments.curtain
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -16,7 +16,11 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import info.proteo.curtain.R
+import info.proteo.curtain.presentation.adapters.CurtainAdapter
+import info.proteo.curtain.CurtainViewModel
 import info.proteo.curtain.presentation.dialogs.AddCurtainDialog
+import info.proteo.curtain.presentation.fragments.curtain.CurtainListFragmentDirections
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -95,7 +99,7 @@ class CurtainListFragment : Fragment() {
                         ).show()
 
                         // Refresh the list to show updated file size
-                        adapter.notifyDataSetChanged()
+                        // The adapter will be refreshed automatically via StateFlow
                     } catch (e: Exception) {
                         // Hide progress indicators on error
                         downloadProgressContainer?.visibility = View.GONE

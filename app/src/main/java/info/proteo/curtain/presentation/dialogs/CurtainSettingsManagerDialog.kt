@@ -2,6 +2,7 @@ package info.proteo.curtain.presentation.dialogs
 
 import android.app.Dialog
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -112,9 +113,14 @@ class CurtainSettingsManagerDialog : DialogFragment() {
     }
     
     private fun setupLoadTab() {
-        loadAdapter = SettingsVariantLoadAdapter { variant ->
-            loadSettingsVariant(variant)
-        }
+        loadAdapter = SettingsVariantLoadAdapter(
+            onLoadClick = { variant ->
+                loadSettingsVariant(variant)
+            },
+            onDeleteClick = { variant ->
+                deleteSettingsVariant(variant)
+            }
+        )
         
         binding.loadRecyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
@@ -163,24 +169,18 @@ class CurtainSettingsManagerDialog : DialogFragment() {
         
         lifecycleScope.launch {
             try {
-                val currentSettings = captureCurrentSettings()
-                val variant = SettingsVariant(
-                    id = UUID.randomUUID().toString(),
+                val result = settingsVariantService.createVariantFromCurrentState(
                     name = name,
-                    description = description.ifEmpty { null },
-                    createdAt = System.currentTimeMillis(),
-                    lastModified = System.currentTimeMillis(),
-                    visualSettings = currentSettings.visualSettings,
-                    analysisSettings = currentSettings.analysisSettings,
-                    searchSettings = currentSettings.searchSettings,
-                    conditionSettings = currentSettings.conditionSettings,
-                    plotSettings = currentSettings.plotSettings,
-                    appPreferences = currentSettings.appPreferences
+                    curtainDataService = viewModel.curtainDataService,
+                    description = description.ifEmpty { null }
                 )
                 
-                settingsVariantService.saveVariant(variant)
-                Toast.makeText(requireContext(), "Settings saved as '$name'", Toast.LENGTH_SHORT).show()
-                dismiss()
+                if (result.isSuccess) {
+                    Toast.makeText(requireContext(), "Settings saved as '$name'", Toast.LENGTH_SHORT).show()
+                    dismiss()
+                } else {
+                    Toast.makeText(requireContext(), "Failed to save settings: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                }
             } catch (e: Exception) {
                 Toast.makeText(requireContext(), "Failed to save settings: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -204,41 +204,80 @@ class CurtainSettingsManagerDialog : DialogFragment() {
         }
     }
     
-    private fun captureCurrentSettings(): SettingsVariant {
-        // Capture current application state and convert to SettingsVariant
-        // This would gather current colors, analysis parameters, etc.
-        return SettingsVariant(
-            id = "",
-            name = "",
-            description = null,
-            createdAt = System.currentTimeMillis(),
-            lastModified = System.currentTimeMillis(),
-            visualSettings = VisualSettings(
-                colorPalette = "pastel"
-            ),
-            analysisSettings = AnalysisSettings(
-                pCutoff = 0.05,
-                log2FCCutoff = 0.6
-            ),
-            searchSettings = SearchSettings(
-                searchLists = emptyList()
-            ),
-            conditionSettings = ConditionSettings(
-                conditionOrder = emptyList()
-            ),
-            plotSettings = PlotSettings(
-                volcanoAxis = null
-            ),
-            appPreferences = AppPreferences(
-                theme = "system"
-            )
-        )
-    }
     
     private fun applySettingsVariant(variant: SettingsVariant) {
-        // Apply the variant settings to the current session
-        // This would update colors, analysis parameters, etc.
-        // Implementation depends on how settings are managed in the app
+        lifecycleScope.launch {
+            try {
+                // Apply all settings categories
+                val categories = listOf(
+                    SettingsCategory.VISUAL,
+                    SettingsCategory.ANALYSIS,
+                    SettingsCategory.SEARCH,
+                    SettingsCategory.CONDITIONS,
+                    SettingsCategory.PLOTS,
+                    SettingsCategory.PREFERENCES
+                )
+                
+                settingsVariantService.applyVariant(variant, viewModel.curtainDataService, categories)
+                
+                // Trigger UI refresh - notify viewModel that settings have changed
+                viewModel.refreshFromSettingsUpdate()
+                
+                // Also trigger search update to refresh search lists
+                viewModel.refreshFromSearchUpdate()
+                
+                Toast.makeText(
+                    requireContext(),
+                    "Settings variant '${variant.name}' applied successfully",
+                    Toast.LENGTH_LONG
+                ).show()
+                
+            } catch (e: Exception) {
+                Log.e("CurtainSettingsManagerDialog", "Error applying settings variant", e)
+                Toast.makeText(
+                    requireContext(),
+                    "Error applying settings: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+    
+    private fun deleteSettingsVariant(variant: SettingsVariant) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Delete Settings Variant")
+            .setMessage("Are you sure you want to delete '${variant.name}'? This action cannot be undone.")
+            .setPositiveButton("Delete") { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        val result = settingsVariantService.deleteVariant(variant.id)
+                        if (result.isSuccess) {
+                            Toast.makeText(
+                                requireContext(),
+                                "Settings variant '${variant.name}' deleted successfully",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            // Refresh the list
+                            loadVariants()
+                        } else {
+                            Toast.makeText(
+                                requireContext(),
+                                "Failed to delete variant: ${result.exceptionOrNull()?.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("CurtainSettingsManagerDialog", "Error deleting variant", e)
+                        Toast.makeText(
+                            requireContext(),
+                            "Error deleting variant: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
     
     private fun updateCurrentSettingsPreview() {
@@ -269,7 +308,8 @@ class CurtainSettingsManagerDialog : DialogFragment() {
 }
 
 class SettingsVariantLoadAdapter(
-    private val onLoadClick: (SettingsVariant) -> Unit
+    private val onLoadClick: (SettingsVariant) -> Unit,
+    private val onDeleteClick: (SettingsVariant) -> Unit
 ) : RecyclerView.Adapter<SettingsVariantLoadAdapter.ViewHolder>() {
     
     private var variants = listOf<SettingsVariant>()
@@ -327,15 +367,7 @@ class SettingsVariantLoadAdapter(
             }
             
             binding.deleteButton.setOnClickListener {
-                // Handle delete action
-                MaterialAlertDialogBuilder(binding.root.context)
-                    .setTitle("Delete Settings Variant")
-                    .setMessage("Are you sure you want to delete '${variant.name}'?")
-                    .setPositiveButton("Delete") { _, _ ->
-                        // TODO: Implement delete functionality
-                    }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                onDeleteClick(variant)
             }
         }
         

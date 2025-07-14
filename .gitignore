@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+*.keystore
+keystore-base64.txt
+GITHUB_SECRETS_SETUP.md

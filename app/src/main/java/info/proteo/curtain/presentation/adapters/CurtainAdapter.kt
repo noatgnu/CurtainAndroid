@@ -1,4 +1,4 @@
-package info.proteo.curtain
+package info.proteo.curtain.presentation.adapters
 
 import android.view.LayoutInflater
 import android.view.View
@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import info.proteo.curtain.R
 import info.proteo.curtain.data.local.database.entities.CurtainEntity
 import java.io.File
 import java.text.DecimalFormat
@@ -43,7 +44,15 @@ class CurtainAdapter(
 
         fun bind(curtain: CurtainEntity) {
             tvLinkId.text = curtain.linkId
-            tvDescription.text = curtain.description
+            
+            // Handle description visibility - show if not empty, hide if empty
+            if (!curtain.description.isNullOrBlank()) {
+                tvDescription.text = curtain.description
+                tvDescription.visibility = View.VISIBLE
+            } else {
+                tvDescription.visibility = View.GONE
+            }
+            
             tvType.text = curtain.curtainType
 
             // Display file size and update button state based on file existence

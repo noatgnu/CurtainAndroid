@@ -9,6 +9,8 @@ import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -19,6 +21,7 @@ import info.proteo.curtain.CurtainSettings
 import info.proteo.curtain.VolcanoAxis
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import info.proteo.curtain.databinding.FragmentVolcanoPlotTabBinding
+import info.proteo.curtain.utils.EdgeToEdgeHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,6 +37,9 @@ class VolcanoPlotTabFragment : Fragment() {
     private val binding get() = _binding!!
 
     private val viewModel: CurtainDetailsViewModel by activityViewModels()
+    
+    // Variable to track if a volcano plot refresh is in progress
+    private var isRefreshing = false
 
 
     override fun onCreateView(
@@ -47,7 +53,10 @@ class VolcanoPlotTabFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        EdgeToEdgeHelper.setupWebView(binding.webView)
         setupWebView()
+        
+        // Primary observer for curtain data changes
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.curtainData.collect { curtainData ->
@@ -57,7 +66,35 @@ class VolcanoPlotTabFragment : Fragment() {
                 }
             }
         }
+        
+        // Direct volcano plot refresh trigger for search updates
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var lastTriggerValue = -1
+                viewModel.volcanoPlotRefreshTrigger.collect { triggerValue ->
+                    if (lastTriggerValue != -1 && triggerValue != lastTriggerValue) {
+                        val curtainData = viewModel.curtainData.value
+                        if (curtainData != null) {
+                            viewModel.searchService.saveSearchListsToCurtainData(curtainData)
+                            loadVolcanoPlotDefer()
+                        }
+                    }
+                    lastTriggerValue = triggerValue
+                }
+            }
+        }
     }
+    
+    override fun onResume() {
+        super.onResume()
+        // Force refresh when returning to this tab to ensure search changes are reflected
+        val curtainData = viewModel.curtainData.value
+        if (curtainData != null) {
+            viewModel.searchService.saveSearchListsToCurtainData(curtainData)
+            loadVolcanoPlotDefer()
+        }
+    }
+    
 
     private fun setupWebView() {
         binding.webView.apply {
@@ -642,12 +679,26 @@ class VolcanoPlotTabFragment : Fragment() {
         }
     }
 
+    /**
+     * Public method to force refresh the volcano plot from external components
+     */
+    fun refreshVolcanoPlot() {
+        val curtainData = viewModel.curtainData.value
+        if (curtainData != null) {
+            viewModel.searchService.saveSearchListsToCurtainData(curtainData)
+            loadVolcanoPlotDefer()
+        }
+    }
+    
     private fun loadVolcanoPlotDefer() {
-        Log.d("VolcanoPlot", "Loading volcano plot")
+        // Prevent multiple simultaneous refreshes
+        if (isRefreshing) {
+            return
+        }
         val curtainData = viewModel.curtainData.value ?: return
         val curtainSettings = viewModel.curtainSettings.value ?: return
 
-        // Show loading initially
+        isRefreshing = true
         showLoading(true)
 
         // Launch a coroutine in the IO dispatcher for background processing
@@ -673,11 +724,8 @@ class VolcanoPlotTabFragment : Fragment() {
                         null
                     )
 
-                    // Update settings with the new color map
-
-                    Log.d("VolcanoPlot", "Updated color map: ${result.updatedVolcanoAxis}")
-
                     showLoading(false)
+                    isRefreshing = false
                 }
             } catch (e: Exception) {
                 // Handle errors on the main thread
@@ -686,6 +734,7 @@ class VolcanoPlotTabFragment : Fragment() {
                     binding.errorText.visibility = View.VISIBLE
                     binding.errorText.text = "Error loading plot: ${e.message}"
                     showLoading(false)
+                    isRefreshing = false
                 }
             }
         }

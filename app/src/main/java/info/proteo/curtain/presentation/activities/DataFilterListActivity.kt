@@ -1,12 +1,14 @@
-package info.proteo.curtain
+package info.proteo.curtain.presentation.activities
 
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import com.google.android.material.color.MaterialColors
 import dagger.hilt.android.AndroidEntryPoint
+import info.proteo.curtain.R
+import info.proteo.curtain.utils.ThemeHelper
+import info.proteo.curtain.utils.EdgeToEdgeHelper
 
 @AndroidEntryPoint
 class DataFilterListActivity : AppCompatActivity() {
@@ -14,19 +16,18 @@ class DataFilterListActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        setContentView(R.layout.activity_data_filter_list)
-
-        // Configure window for proper theming
+        // Apply saved theme preference
+        ThemeHelper.applyTheme(this)
+        
+        // Enable edge-to-edge display
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
-        // Set status bar color and appearance
-        val primaryColor = MaterialColors.getColor(this, com.google.android.material.R.attr.colorPrimary, 0)
-        window.statusBarColor = primaryColor
+        setContentView(R.layout.activity_data_filter_list)
         
-        // Set status bar content color based on primary color luminance
-        val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
-        val isLightColor = MaterialColors.isColorLight(primaryColor)
-        windowInsetsController.isAppearanceLightStatusBars = isLightColor
+        // Setup edge-to-edge display
+        val appBarLayout = findViewById<View>(R.id.appBarLayout)
+        val navHostFragment = findViewById<View>(R.id.nav_host_filter_list)
+        EdgeToEdgeHelper.setupActivity(this, appBarLayout, navHostFragment)
         
         // Set up toolbar
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
@@ -42,6 +43,7 @@ class DataFilterListActivity : AppCompatActivity() {
         // The nav host fragment will handle fragment transactions through the navigation graph
         // No need to manually add DataFilterListFragment as it's the start destination in the nav graph
     }
+    
 
     override fun onSupportNavigateUp(): Boolean {
         onBackPressed()

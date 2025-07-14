@@ -6,7 +6,9 @@ import com.squareup.moshi.JsonAdapter
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
 import dagger.hilt.android.qualifiers.ApplicationContext
+import info.proteo.curtain.CurtainDataService
 import info.proteo.curtain.CurtainSettings
+import info.proteo.curtain.VolcanoAxis
 import info.proteo.curtain.data.models.*
 import info.proteo.curtain.utils.PlotlyChartGenerator
 import kotlinx.coroutines.Dispatchers
@@ -79,6 +81,7 @@ class SettingsVariantService @Inject constructor(
      */
     suspend fun createVariantFromCurrentState(
         name: String,
+        curtainDataService: CurtainDataService,
         description: String? = null,
         tags: List<String> = emptyList(),
         includeCategories: List<SettingsCategory> = SettingsCategory.values().toList()
@@ -90,11 +93,11 @@ class SettingsVariantService @Inject constructor(
                 name = name,
                 description = description,
                 tags = tags,
-                visualSettings = if (SettingsCategory.VISUAL in includeCategories) captureVisualSettings() else VisualSettings(),
-                analysisSettings = if (SettingsCategory.ANALYSIS in includeCategories) captureAnalysisSettings() else AnalysisSettings(),
+                visualSettings = if (SettingsCategory.VISUAL in includeCategories) captureVisualSettings(curtainDataService) else VisualSettings(),
+                analysisSettings = if (SettingsCategory.ANALYSIS in includeCategories) captureAnalysisSettings(curtainDataService) else AnalysisSettings(),
                 searchSettings = if (SettingsCategory.SEARCH in includeCategories) captureSearchSettings() else SearchSettings(),
                 conditionSettings = if (SettingsCategory.CONDITIONS in includeCategories) captureConditionSettings() else ConditionSettings(),
-                plotSettings = if (SettingsCategory.PLOTS in includeCategories) capturePlotSettings() else PlotSettings(),
+                plotSettings = if (SettingsCategory.PLOTS in includeCategories) capturePlotSettings(curtainDataService) else PlotSettings(),
                 appPreferences = if (SettingsCategory.PREFERENCES in includeCategories) captureAppPreferences() else AppPreferences()
             )
 
@@ -166,23 +169,24 @@ class SettingsVariantService @Inject constructor(
      */
     suspend fun applyVariant(
         variant: SettingsVariant,
+        curtainDataService: CurtainDataService,
         applyCategories: List<SettingsCategory> = SettingsCategory.values().toList()
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (SettingsCategory.VISUAL in applyCategories) {
-                applyVisualSettings(variant.visualSettings)
+                applyVisualSettings(variant.visualSettings, curtainDataService)
             }
             if (SettingsCategory.ANALYSIS in applyCategories) {
-                applyAnalysisSettings(variant.analysisSettings)
+                applyAnalysisSettings(variant.analysisSettings, curtainDataService)
             }
             if (SettingsCategory.SEARCH in applyCategories) {
                 applySearchSettings(variant.searchSettings)
             }
             if (SettingsCategory.CONDITIONS in applyCategories) {
-                applyConditionSettings(variant.conditionSettings)
+                applyConditionSettings(variant.conditionSettings, curtainDataService)
             }
             if (SettingsCategory.PLOTS in applyCategories) {
-                applyPlotSettings(variant.plotSettings)
+                applyPlotSettings(variant.plotSettings, curtainDataService)
             }
             if (SettingsCategory.PREFERENCES in applyCategories) {
                 applyAppPreferences(variant.appPreferences)
@@ -325,9 +329,10 @@ class SettingsVariantService @Inject constructor(
     /**
      * Create default settings variant
      */
-    suspend fun createDefaultVariant(): Result<SettingsVariant> {
+    suspend fun createDefaultVariant(curtainDataService: CurtainDataService): Result<SettingsVariant> {
         return createVariantFromCurrentState(
             name = "Default Settings",
+            curtainDataService = curtainDataService,
             description = "Default application settings",
             tags = listOf("default", "system")
         )
@@ -417,31 +422,58 @@ class SettingsVariantService @Inject constructor(
 
     // Private helper methods for capturing current state
 
-    private fun captureVisualSettings(): VisualSettings {
+    private fun captureVisualSettings(curtainDataService: CurtainDataService): VisualSettings {
+        val currentCurtainSettings = curtainDataService.curtainSettings
+        
+        // Capture comprehensive color state from both services
+        val conditionColors = conditionColorService.conditionColors.value
+        val settingsColorMap = currentCurtainSettings.colorMap  // This is Map<String, String>
+        
+        // Merge both color sources for complete capture
+        val combinedColorMap = mutableMapOf<String, String>()
+        
+        // Merge settingsColorMap (already Map<String, String>)
+        combinedColorMap.putAll(settingsColorMap)
+        
+        // Merge conditionColors (Map<String, String>)
+        combinedColorMap.putAll(conditionColors)
+        
         return VisualSettings(
             colorPalette = conditionColorService.currentPalette.value,
-            customColorMap = conditionColorService.conditionColors.value,
-            plotFontFamily = "Arial",
-            scatterPlotMarkerSize = 10.0,
-            volcanoPlotGrid = mapOf("x" to true, "y" to true)
+            customColorMap = combinedColorMap,
+            backgroundColorGrey = currentCurtainSettings.backGroundColorGrey,
+            defaultColorList = currentCurtainSettings.defaultColorList
         )
     }
 
-    private fun captureAnalysisSettings(): AnalysisSettings {
+    private fun captureAnalysisSettings(curtainDataService: CurtainDataService): AnalysisSettings {
+        val currentCurtainSettings = curtainDataService.curtainSettings
         return AnalysisSettings(
-            pCutoff = 0.05,
-            log2FCCutoff = 0.6,
-            enableImputation = false,
-            viewPeptideCount = false,
-            fetchUniprot = true
+            pCutoff = currentCurtainSettings.pCutoff,
+            log2FCCutoff = currentCurtainSettings.log2FCCutoff,
+            sampleVisible = currentCurtainSettings.sampleVisible,
+            legendStatus = currentCurtainSettings.legendStatus.mapValues { (_, value) -> 
+                when (value) {
+                    is Boolean -> value
+                    else -> true
+                }
+            }
         )
     }
 
     private fun captureSearchSettings(): SearchSettings {
-        // Since the search service API is not available, return empty settings
         return SearchSettings(
-            searchLists = emptyList(),
-            activeFilters = emptyList()
+            searchLists = searchService.getSearchLists().map { searchList ->
+                SavedSearchList(
+                    id = searchList.id,
+                    name = searchList.name,
+                    color = searchList.color,
+                    proteinIds = searchList.proteinIds,
+                    searchTerms = searchList.searchTerms,
+                    searchType = searchList.searchType.name,
+                    description = searchList.description
+                )
+            }
         )
     }
 
@@ -452,16 +484,17 @@ class SettingsVariantService @Inject constructor(
         )
     }
 
-    private fun capturePlotSettings(): PlotSettings {
+    private fun capturePlotSettings(curtainDataService: CurtainDataService): PlotSettings {
+        val currentCurtainSettings = curtainDataService.curtainSettings
         return PlotSettings(
-            chartType = "INDIVIDUAL_BAR",
-            stringDBColorMap = mapOf(
-                "Increase" to "#8d0606",
-                "Decrease" to "#4f78a4",
-                "In dataset" to "#ce8080",
-                "Not in dataset" to "#676666"
-            ),
-            proteomicsDBColor = "#ff7f0e"
+            volcanoAxis = currentCurtainSettings.volcanoAxis?.let { axis ->
+                VolcanoAxisSettings(
+                    minX = axis.minX,
+                    maxX = axis.maxX,
+                    minY = axis.minY,
+                    maxY = axis.maxY
+                )
+            }
         )
     }
 
@@ -477,29 +510,96 @@ class SettingsVariantService @Inject constructor(
 
     // Private helper methods for applying settings
 
-    private suspend fun applyVisualSettings(settings: VisualSettings) {
+    private suspend fun applyVisualSettings(settings: VisualSettings, curtainDataService: CurtainDataService) {
+        // Update condition color service first
         conditionColorService.setCurrentPalette(settings.colorPalette)
+        conditionColorService.updateConditionColors(settings.customColorMap)
+        
+        // Update curtain settings in the main data service
+        val currentSettings = curtainDataService.curtainSettings
+        
+        // Prepare the complete color map for CurtainSettings (String -> String)
+        val completeColorMapForSettings = mutableMapOf<String, String>()
+        completeColorMapForSettings.putAll(currentSettings.colorMap)
+        completeColorMapForSettings.putAll(settings.customColorMap)
+        
+        curtainDataService.curtainSettings = currentSettings.copy(
+            colorMap = completeColorMapForSettings,
+            backGroundColorGrey = settings.backgroundColorGrey,
+            defaultColorList = settings.defaultColorList.ifEmpty { currentSettings.defaultColorList }
+        )
+        
+        // Ensure condition color service state is synchronized (String -> String)
         conditionColorService.updateConditionColors(settings.customColorMap)
     }
 
-    private suspend fun applyAnalysisSettings(settings: AnalysisSettings) {
-        // Apply analysis settings to relevant services
-        // This would update current analysis parameters
+    private suspend fun applyAnalysisSettings(settings: AnalysisSettings, curtainDataService: CurtainDataService) {
+        // Update curtain settings with analysis parameters
+        val currentSettings = curtainDataService.curtainSettings
+        curtainDataService.curtainSettings = currentSettings.copy(
+            pCutoff = settings.pCutoff,
+            log2FCCutoff = settings.log2FCCutoff,
+            sampleVisible = settings.sampleVisible,
+            legendStatus = settings.legendStatus.mapValues { (_, value) -> value as Any }
+        )
     }
 
     private suspend fun applySearchSettings(settings: SearchSettings) {
-        // Search service integration would go here
-        // For now, this is a placeholder until the search service API is available
+        try {
+            // Apply search lists to the search service
+            if (settings.searchLists.isNotEmpty()) {
+                // Clear existing search lists
+                searchService.clearAllSearchLists()
+                
+                // Add the saved search lists
+                settings.searchLists.forEach { savedSearchList ->
+                    try {
+                        searchService.createSearchList(
+                            name = savedSearchList.name,
+                            proteinIds = savedSearchList.proteinIds,
+                            searchTerms = savedSearchList.searchTerms,
+                            searchType = SearchType.valueOf(savedSearchList.searchType),
+                            color = savedSearchList.color,
+                            description = savedSearchList.description
+                        )
+                    } catch (e: Exception) {
+                        // Log but don't fail the entire operation for individual search list issues
+                        android.util.Log.w("SettingsVariantService", "Failed to restore search list '${savedSearchList.name}': ${e.message}")
+                    }
+                }
+                
+                // Search lists have been restored successfully
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SettingsVariantService", "Error applying search settings", e)
+        }
     }
 
-    private suspend fun applyConditionSettings(settings: ConditionSettings) {
+    private suspend fun applyConditionSettings(settings: ConditionSettings, curtainDataService: CurtainDataService) {
+        // Update condition color service
         conditionColorService.setConditionOrder(settings.conditionOrder)
         conditionColorService.updateConditionColors(settings.conditionColors)
+        
+        // Update curtain settings
+        val currentSettings = curtainDataService.curtainSettings
+        curtainDataService.curtainSettings = currentSettings.copy(
+            sampleMap = buildSampleMapWithConditions(settings, curtainDataService)
+        )
     }
 
-    private suspend fun applyPlotSettings(settings: PlotSettings) {
-        // Apply plot-specific settings
-        // This would update chart generation parameters
+    private suspend fun applyPlotSettings(settings: PlotSettings, curtainDataService: CurtainDataService) {
+        // Update curtain settings with plot-specific settings
+        val currentSettings = curtainDataService.curtainSettings
+        curtainDataService.curtainSettings = currentSettings.copy(
+            volcanoAxis = settings.volcanoAxis?.let { axis ->
+                VolcanoAxis(
+                    minX = axis.minX,
+                    maxX = axis.maxX,
+                    minY = axis.minY,
+                    maxY = axis.maxY
+                )
+            } ?: currentSettings.volcanoAxis
+        )
     }
 
     private suspend fun applyAppPreferences(preferences: AppPreferences) {
@@ -511,6 +611,27 @@ class SettingsVariantService @Inject constructor(
             putBoolean("enable_animations", preferences.enableAnimations)
             apply()
         }
+    }
+    
+    /**
+     * Helper method to build sample map with condition information
+     */
+    private fun buildSampleMapWithConditions(settings: ConditionSettings, curtainDataService: CurtainDataService): MutableMap<String, Map<String, String>> {
+        val currentSampleMap = curtainDataService.curtainSettings.sampleMap.toMutableMap()
+        
+        // Update condition information in sample map
+        settings.conditionOrder.forEachIndexed { index, condition ->
+            // Find samples that belong to this condition and update their condition field
+            currentSampleMap.forEach { (sampleId, sampleInfo) ->
+                if (sampleInfo["condition"] == condition) {
+                    currentSampleMap[sampleId] = sampleInfo.toMutableMap().apply {
+                        put("condition", condition)
+                    }
+                }
+            }
+        }
+        
+        return currentSampleMap
     }
 
     // Utility methods

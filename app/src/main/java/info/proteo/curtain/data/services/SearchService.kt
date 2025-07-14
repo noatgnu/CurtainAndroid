@@ -306,17 +306,21 @@ class SearchService @Inject constructor(
             }
             
             SearchType.ACCESSION_ID -> {
-                // Search by accession ID
-                uniprotService?.accMap[searchTerm]?.forEach { proteinId ->
-                    val geneName = uniprotService?.getUniprotFromPrimary(proteinId)?.get("Gene Names")?.toString()
-                    results.add(SearchResult(
-                        proteinId = proteinId,
-                        geneName = geneName,
-                        accessionId = searchTerm,
-                        searchType = SearchType.ACCESSION_ID,
-                        searchTerm = searchTerm,
-                        matchType = MatchType.EXACT
-                    ))
+                // Search by accession ID -> primary IDs via accMap
+                val primaryIds = uniprotService?.accMap?.get(searchTerm)
+                if (primaryIds != null) {
+                    (primaryIds as? List<*>)?.forEach { primaryId ->
+                        val proteinId = primaryId.toString()
+                        val geneName = uniprotService?.getUniprotFromPrimary(proteinId)?.get("Gene Names")?.toString()
+                        results.add(SearchResult(
+                            proteinId = proteinId,
+                            geneName = geneName,
+                            accessionId = searchTerm,
+                            searchType = SearchType.ACCESSION_ID,
+                            searchTerm = searchTerm,
+                            matchType = MatchType.EXACT
+                        ))
+                    }
                 }
             }
         }
@@ -386,23 +390,26 @@ class SearchService @Inject constructor(
             }
             
             SearchType.ACCESSION_ID -> {
-                // For accession IDs, try partial matching
-                uniprotService?.accMap?.forEach { (accessionId, proteinIdList) ->
+                // For accession IDs, try partial matching -> convert to primary IDs
+                uniprotService?.accMap?.forEach { (accessionId, primaryIdList) ->
                     if (accessionId.lowercase().contains(searchTerm.lowercase())) {
                         val accessionIdLower = accessionId.lowercase()
                         val splittedAccessionIds = accessionIdLower.split(";")
                         splittedAccessionIds.forEach { splittedAccessionId ->
                             if (splittedAccessionId == searchTerm.lowercase()) {
-                                // If we have a match, add all associated protein IDs
-                                val geneName = uniprotService?.getUniprotFromPrimary(splittedAccessionId)?.get("Gene Names")?.toString()
-                                results.add(SearchResult(
-                                    proteinId = splittedAccessionId,
-                                    geneName = geneName,
-                                    accessionId = accessionId,
-                                    searchType = SearchType.ACCESSION_ID,
-                                    searchTerm = searchTerm,
-                                    matchType = MatchType.PARTIAL
-                                ))
+                                // Add all primary IDs associated with this accession ID
+                                (primaryIdList as? List<*>)?.forEach { primaryId ->
+                                    val proteinId = primaryId.toString()
+                                    val geneName = uniprotService?.getUniprotFromPrimary(proteinId)?.get("Gene Names")?.toString()
+                                    results.add(SearchResult(
+                                        proteinId = proteinId,
+                                        geneName = geneName,
+                                        accessionId = accessionId,
+                                        searchType = SearchType.ACCESSION_ID,
+                                        searchTerm = searchTerm,
+                                        matchType = MatchType.PARTIAL
+                                    ))
+                                }
                             }
                         }
                     }
@@ -415,22 +422,48 @@ class SearchService @Inject constructor(
     
     /**
      * Get primary IDs from gene names - replicates frontend getPrimaryIDsFromGeneNames()
+     * Chain: geneName -> geneNameToAcc -> accMap -> primaryIds
      */
     private fun getPrimaryIDsFromGeneNames(geneName: String, curtainData: AppData): List<String> {
         val results = mutableListOf<String>()
+        val processedGeneName = geneName.uppercase().trim()
         
-        // Search through UniProt results for matching gene names
-        uniprotService?.results?.forEach { (proteinId, uniprotRecord) ->
-            (uniprotRecord as? Map<*, *>)?.get("Gene Names")?.toString()?.let { recordGeneName ->
-                // Process gene names as frontend does: replaceAll(" ", ";").toUpperCase()
-                val processedGeneNames = recordGeneName.replace(" ", ";").uppercase().split(";")
-                if (processedGeneNames.any { it.trim() == geneName.uppercase().trim() }) {
-                    results.add(proteinId)
+        Log.d("SearchService", "getPrimaryIDsFromGeneNames: Looking for gene name '$processedGeneName'")
+        Log.d("SearchService", "geneNameToAcc available: ${uniprotService?.geneNameToAcc != null}")
+        Log.d("SearchService", "geneNameToAcc size: ${uniprotService?.geneNameToAcc?.size}")
+        Log.d("SearchService", "geneNameToAcc keys sample: ${uniprotService?.geneNameToAcc?.keys?.take(5)}")
+        
+        // First: gene name -> accession IDs via geneNameToAcc
+        val accessionIds = uniprotService?.geneNameToAcc?.get(processedGeneName)
+        Log.d("SearchService", "Found accessionIds for '$processedGeneName': $accessionIds")
+        
+        if (accessionIds != null) {
+            // geneNameToAcc returns a Map with accession IDs as keys, not a List
+            (accessionIds as? Map<*, *>)?.keys?.forEach { accessionId ->
+                val accId = accessionId.toString()
+                Log.d("SearchService", "Looking up accession ID '$accId' in accMap")
+                val primaryIds = uniprotService?.accMap?.get(accId)
+                Log.d("SearchService", "Found primaryIds for '$accId': $primaryIds")
+                
+                if (primaryIds != null) {
+                    (primaryIds as? List<*>)?.forEach { primaryId ->
+                        results.add(primaryId.toString())
+                        Log.d("SearchService", "Added primary ID: ${primaryId.toString()}")
+                    }
+                }
+            }
+        } else {
+            Log.d("SearchService", "No accession IDs found for gene name '$processedGeneName'")
+            // Try alternative lookup - check if gene name exists in any form
+            uniprotService?.geneNameToAcc?.keys?.forEach { key ->
+                if (key.contains(processedGeneName, ignoreCase = true)) {
+                    Log.d("SearchService", "Found similar gene name key: '$key'")
                 }
             }
         }
         
-        return results
+        Log.d("SearchService", "Final results for gene '$processedGeneName': $results")
+        return results.distinct()
     }
     
     /**
@@ -470,27 +503,53 @@ class SearchService @Inject constructor(
                 }
             }
             SearchType.GENE_NAME -> {
-                Log.d("SearchService", "Processing gene names for search: $searchTerms, ${uniprotService?.geneNameToAcc}")
+                Log.d("SearchService", "Processing gene names for search: $searchTerms")
+                Log.d("SearchService", "geneNameToAcc available: ${uniprotService?.geneNameToAcc != null}, size: ${uniprotService?.geneNameToAcc?.size}")
                 searchTerms.forEach { term ->
                     val processedTerm = term.trim().uppercase()
+                    Log.d("SearchService", "Processing gene name term: '$processedTerm'")
                     if (processedTerm.isNotEmpty()) {
-                        val geneNames = uniprotService?.geneNameToAcc[processedTerm]
-                        if (geneNames != null) {
-                            processedTerms[processedTerm] = geneNames as List<String>
+                        // Chain: geneName -> geneNameToAcc -> accMap -> primaryIds
+                        val primaryIds = mutableListOf<String>()
+                        val accessionIds = uniprotService?.geneNameToAcc?.get(processedTerm)
+                        Log.d("SearchService", "Found accessionIds for '$processedTerm': $accessionIds")
+                        
+                        if (accessionIds != null) {
+                            // geneNameToAcc returns a Map with accession IDs as keys, not a List
+                            (accessionIds as? Map<*, *>)?.keys?.forEach { accessionId ->
+                                val accId = accessionId.toString()
+                                Log.d("SearchService", "Looking up accession ID '$accId'")
+                                val primaryIdList = uniprotService?.accMap?.get(accId)
+                                Log.d("SearchService", "Found primaryIdList for '$accId': $primaryIdList")
+                                if (primaryIdList != null) {
+                                    (primaryIdList as? List<*>)?.forEach { primaryId ->
+                                        primaryIds.add(primaryId.toString())
+                                    }
+                                }
+                            }
                         } else {
+                            Log.d("SearchService", "No accessionIds found for gene name '$processedTerm'")
+                        }
+                        
+                        if (primaryIds.isNotEmpty()) {
+                            Log.d("SearchService", "Final primaryIds for '$processedTerm': $primaryIds")
+                            processedTerms[processedTerm] = primaryIds.distinct()
+                        } else {
+                            Log.d("SearchService", "No primaryIds found, using original term")
                             processedTerms[processedTerm] = listOf(processedTerm)
                         }
                     }
                 }
             }
             SearchType.ACCESSION_ID -> {
-                // For accession IDs, we can use the exact ID as the key
+                // For accession IDs -> convert to primary IDs via accMap
                 searchTerms.forEach { term ->
                     val processedTerm = term.trim().uppercase()
                     if (processedTerm.isNotEmpty()) {
-                        val accessionIds = uniprotService?.accMap[processedTerm]
-                        if (accessionIds != null) {
-                            processedTerms[processedTerm] = accessionIds
+                        val primaryIds = uniprotService?.accMap?.get(processedTerm)
+                        if (primaryIds != null) {
+                            val primaryIdList = (primaryIds as? List<*>)?.map { it.toString() } ?: emptyList()
+                            processedTerms[processedTerm] = primaryIdList
                         } else {
                             processedTerms[processedTerm] = listOf(processedTerm)
                         }
@@ -706,26 +765,34 @@ class SearchService @Inject constructor(
     }
     
     /**
-     * Gets all available filter lists from the repository
+     * Gets all available filter lists from the local database only
      */
     suspend fun getAvailableFilterLists(): List<DataFilterList> = withContext(Dispatchers.IO) {
-        val result = dataFilterListRepository.fetchAllDataFilterLists()
-        return@withContext if (result.isSuccess) {
-            result.getOrNull()?.map { it.second } ?: emptyList()
-        } else {
-            emptyList()
+        val entities = dataFilterListRepository.getAllDataFilterLists()
+        return@withContext entities.map { entity ->
+            DataFilterList(
+                id = entity.id,
+                name = entity.name,
+                data = entity.data,
+                isDefault = entity.isDefault
+            )
         }
     }
     
     /**
-     * Gets filter lists grouped by category
+     * Gets filter lists grouped by category from local database only
      */
     suspend fun getFilterListsByCategory(): Map<String, List<DataFilterList>> = withContext(Dispatchers.IO) {
-        val result = dataFilterListRepository.fetchAllDataFilterLists()
-        return@withContext if (result.isSuccess) {
-            result.getOrNull()?.map { it.second }?.groupBy { it.category } ?: emptyMap()
-        } else {
-            emptyMap()
+        val entities = dataFilterListRepository.getAllDataFilterLists()
+        return@withContext entities.groupBy { it.category }.mapValues { (_, entityList) ->
+            entityList.map { entity ->
+                DataFilterList(
+                    id = entity.id,
+                    name = entity.name,
+                    data = entity.data,
+                    isDefault = entity.isDefault
+                )
+            }
         }
     }
     
@@ -741,13 +808,16 @@ class SearchService @Inject constructor(
         val startTime = System.currentTimeMillis()
         
         try {
-            // Get the filter list data
-            val result = dataFilterListRepository.fetchDataFilterListById(request.filterListId)
-            val filterList = if (result.isSuccess) {
-                result.getOrNull()
-            } else {
-                null
-            } ?: return@withContext Pair(null, SearchStatistics(0, 0, emptyList(), 0, 0, 0))
+            // Get the filter list data from local database only
+            val filterListEntity = dataFilterListRepository.getDataFilterListById(request.filterListId)
+                ?: return@withContext Pair(null, SearchStatistics(0, 0, emptyList(), 0, 0, 0))
+            
+            val filterList = DataFilterList(
+                id = filterListEntity.id,
+                name = filterListEntity.name,
+                data = filterListEntity.data,
+                isDefault = filterListEntity.isDefault
+            )
             
             // Process the filter list data exactly like the frontend
             val filterData = processFilterListData(filterList.data)
@@ -777,7 +847,7 @@ class SearchService @Inject constructor(
                     searchTerms = emptyList(), // Filter lists don't have search terms
                     searchType = SearchType.PRIMARY_ID, // Default for filter lists
                     color = request.color,
-                    description = "Imported from filter list: ${filterList.category}"
+                    description = "Imported from filter list: ${filterListEntity.category}"
                 )
                 
                 return@withContext Pair(searchList, statistics)
@@ -848,7 +918,7 @@ class SearchService @Inject constructor(
     }
     
     /**
-     * Gets filter list categories
+     * Gets filter list categories from local database only
      */
     suspend fun getFilterListCategories(): List<String> = withContext(Dispatchers.IO) {
         return@withContext dataFilterListRepository.getAllCategoriesLocal()

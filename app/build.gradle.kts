@@ -79,8 +79,14 @@ tasks.register<Download>("downloadPlotly") {
     overwrite(true)
 }
 
+tasks.register<Download>("downloadQRCodeStyling") {
+    src("https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js")
+    dest(File(projectDir, "src/main/assets/qr-code-styling.min.js"))
+    overwrite(true)
+}
+
 tasks.named("preBuild") {
-    dependsOn("downloadPlotly")
+    dependsOn("downloadPlotly", "downloadQRCodeStyling")
 }
 
 
@@ -116,6 +122,10 @@ dependencies {
     implementation("org.jetbrains.kotlinx:dataframe:0.8.1")
     implementation(libs.androidx.viewpager2)
     implementation(libs.androidx.preference)
+    
+    // QR Code generation
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
 
 }

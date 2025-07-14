@@ -28,6 +28,7 @@ import info.proteo.curtain.presentation.dialogs.ConditionColorManagementDialog
 import info.proteo.curtain.presentation.dialogs.ProteinSearchDialog
 import info.proteo.curtain.data.services.SearchService
 import info.proteo.curtain.R
+import info.proteo.curtain.utils.EdgeToEdgeHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -57,7 +58,7 @@ class CurtainDetailsFragment : Fragment() {
         _binding = FragmentCurtainDetailsBinding.inflate(inflater, container, false)
         return binding.root
     }
-
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setHasOptionsMenu(true)
@@ -65,6 +66,7 @@ class CurtainDetailsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        EdgeToEdgeHelper.setupFragment(this, binding.root, contentView = binding.viewPager)
 
         // Show loading state immediately
         showLoadingState(true)
@@ -154,6 +156,10 @@ class CurtainDetailsFragment : Fragment() {
                 showProteinSearchDialog()
                 true
             }
+            R.id.action_share_qr_code -> {
+                showQRCodeShare()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -179,6 +185,27 @@ class CurtainDetailsFragment : Fragment() {
         // Show protein search dialog
         val dialog = ProteinSearchDialog.newInstance()
         dialog.show(childFragmentManager, "ProteinSearchDialog")
+    }
+    
+    private fun showQRCodeShare() {
+        // Get the curtain entity to extract linkId and frontendURL
+        viewModel.curtainEntity.value?.let { curtainEntity ->
+            val linkId = curtainEntity.linkId
+            val frontendUrl = curtainEntity.frontendURL ?: "https://curtain.proteo.info/"
+            
+            val intent = info.proteo.curtain.presentation.activities.QRCodeShareActivity.createIntent(
+                requireContext(),
+                linkId,
+                frontendUrl
+            )
+            startActivity(intent)
+        } ?: run {
+            android.widget.Toast.makeText(
+                requireContext(),
+                "Curtain data not available",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     override fun onDestroyView() {

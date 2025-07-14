@@ -57,9 +57,26 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".DataFilterListActivity"
+            android:name=".presentation.activities.DataFilterListActivity"
             android:exported="true"
             android:theme="@style/Theme.Curtain" />
+            
+        <activity
+            android:name=".presentation.activities.QRCodeShareActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Curtain"
+            android:parentActivityName=".MainActivity" />
+
+        <!-- FileProvider for sharing QR codes -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
