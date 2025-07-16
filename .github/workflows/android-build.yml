@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17' 
+          java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -57,6 +57,8 @@ jobs:
           alias: curtain-key
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "35.0.0"
 
       - name: Sign Curtain App Bundle
         uses: r0adkll/sign-android-release@v1
@@ -66,7 +68,9 @@ jobs:
           signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
           alias: curtain-key
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
-
+        env:
+          BUILD_TOOLS_VERSION: "35.0.0"
+          
       - name: Set version from tag
         run: |
           if [[ $GITHUB_REF == refs/tags/* ]]; then
