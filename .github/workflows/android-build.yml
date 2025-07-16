@@ -70,7 +70,7 @@ jobs:
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: "35.0.0"
-          
+
       - name: Set version from tag
         run: |
           if [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -83,12 +83,12 @@ jobs:
       - name: Rename signed APK
         run: |
           mkdir -p renamed
-          cp app/build/outputs/apk/release/app-release.apk renamed/curtain-app.${{ env.VERSION }}.signed.apk
+          cp ${{ steps.sign_apk.outputs.signedReleaseFile }} renamed/curtain-app.${{ env.VERSION }}.signed.apk
           echo "RENAMED_APK=renamed/curtain-app.${{ env.VERSION }}.signed.apk" >> $GITHUB_ENV
 
       - name: Rename signed Bundle
         run: |
-          cp app/build/outputs/bundle/release/app-release.aab renamed/curtain-app.${{ env.VERSION }}.signed.aab
+          cp ${{ steps.sign_bundle.outputs.signedReleaseFile }} renamed/curtain-app.${{ env.VERSION }}.signed.aab
           echo "RENAMED_BUNDLE=renamed/curtain-app.${{ env.VERSION }}.signed.aab" >> $GITHUB_ENV
 
       - name: Upload Curtain App APK Artifact
