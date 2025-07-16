@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'  # Using Java 11 as specified in your build.gradle.kts
+          java-version: '17' 
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
