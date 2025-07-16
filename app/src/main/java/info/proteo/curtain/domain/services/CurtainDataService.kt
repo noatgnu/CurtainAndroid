@@ -395,13 +395,26 @@ class CurtainDataService {
                 )
             }
 
+            // If no comparison column is specified, create a default one
+            if (curtainData.differentialForm.comparison.isEmpty()) {
+                curtainData.differentialForm = curtainData.differentialForm.copy(
+                    comparison = "CurtainSetComparison",
+                    comparisonSelect = listOf("1")
+                )
+            }
+
             // Ensure comparisonSelect has a value
             if (curtainData.differentialForm.comparisonSelect.isEmpty()) {
                 val column = curtainData.differentialForm.comparison
                 val firstComparison = if (column.isNotEmpty() &&
                     curtainData.differential.df.rowsCount() > 0) {
-                    val columnData = curtainData.differential.df.getColumn(column)
-                    columnData.get(0)?.toString() ?: "1"
+                    try {
+                        val columnData = curtainData.differential.df.getColumn(column)
+                        columnData.get(0)?.toString() ?: "1"
+                    } catch (e: Exception) {
+                        // Column doesn't exist, use default
+                        "1"
+                    }
                 } else {
                     "1"
                 }
@@ -439,7 +452,17 @@ class CurtainDataService {
             for (rowIndex in 0 until curtainData.differential.df.rowsCount()) {
                 // Check if this row should be included based on comparison value
                 if (comparisonColumn.isNotEmpty() && selectedComparisons.isNotEmpty()) {
-                    val compValue = curtainData.differential.df.getColumn(comparisonColumn).get(rowIndex)?.toString()?.trim() ?: ""
+                    val compValue = if (comparisonColumn == "CurtainSetComparison") {
+                        // For default comparison column, all rows have value "1"
+                        "1"
+                    } else {
+                        try {
+                            curtainData.differential.df.getColumn(comparisonColumn).get(rowIndex)?.toString()?.trim() ?: ""
+                        } catch (e: Exception) {
+                            // Column doesn't exist, use default
+                            "1"
+                        }
+                    }
                     if (compValue !in selectedComparisons) {
                         continue
                     }
@@ -450,7 +473,17 @@ class CurtainDataService {
 
                 // Add only essential columns to the rowMap
                 for (column in essentialColumns) {
-                    val value = curtainData.differential.df.getColumn(column).get(rowIndex) ?: ""
+                    val value = if (column == "CurtainSetComparison") {
+                        // For default comparison column, all rows have value "1"
+                        "1"
+                    } else {
+                        try {
+                            curtainData.differential.df.getColumn(column).get(rowIndex) ?: ""
+                        } catch (e: Exception) {
+                            // Column doesn't exist, skip it
+                            continue
+                        }
+                    }
                     rowMap[column] = value
                 }
 

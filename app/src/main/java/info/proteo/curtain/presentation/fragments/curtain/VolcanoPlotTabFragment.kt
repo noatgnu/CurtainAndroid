@@ -53,7 +53,6 @@ class VolcanoPlotTabFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        EdgeToEdgeHelper.setupWebView(binding.webView)
         setupWebView()
         
         // Primary observer for curtain data changes
@@ -90,8 +89,12 @@ class VolcanoPlotTabFragment : Fragment() {
         // Force refresh when returning to this tab to ensure search changes are reflected
         val curtainData = viewModel.curtainData.value
         if (curtainData != null) {
-            viewModel.searchService.saveSearchListsToCurtainData(curtainData)
-            loadVolcanoPlotDefer()
+            // Ensure differential data is processed first
+            lifecycleScope.launch {
+                viewModel.curtainDataService.processDataAfterImport()
+                viewModel.searchService.saveSearchListsToCurtainData(curtainData)
+                loadVolcanoPlotDefer()
+            }
         }
     }
     
@@ -264,10 +267,23 @@ class VolcanoPlotTabFragment : Fragment() {
             }
         }
 
-        val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+        // Debug: Log all available keys in dataMap
+        Log.d("VolcanoPlot", "Available keys in dataMap: ${curtainData.dataMap.keys}")
+        
+        var processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
 
         if (processedData == null) {
-            throw IllegalStateException("No differential data available")
+            // Try alternative key names that might contain the differential data
+            processedData = curtainData.dataMap["differential"] as? List<Map<String, Any>>
+                ?: curtainData.dataMap["differentialData"] as? List<Map<String, Any>>
+                ?: curtainData.dataMap["processed"] as? List<Map<String, Any>>
+            
+            if (processedData != null) {
+                Log.d("VolcanoPlot", "Using alternative data key, found ${processedData.size} rows")
+            } else {
+                Log.e("VolcanoPlot", "No differential data found in any expected key")
+                throw IllegalStateException("No differential analysis data available")
+            }
         }
 
         for (row in processedData) {
@@ -529,7 +545,21 @@ class VolcanoPlotTabFragment : Fragment() {
                     }
                 }
             }
-            val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+            // Debug: Log all available keys in dataMap
+            Log.d("VolcanoPlot", "Available keys in dataMap: ${curtainData.dataMap.keys}")
+            
+            var processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+
+            if (processedData == null) {
+                // Try alternative key names that might contain the differential data
+                processedData = curtainData.dataMap["differential"] as? List<Map<String, Any>>
+                    ?: curtainData.dataMap["differentialData"] as? List<Map<String, Any>>
+                    ?: curtainData.dataMap["processed"] as? List<Map<String, Any>>
+                
+                if (processedData != null) {
+                    Log.d("VolcanoPlot", "Using alternative data key, found ${processedData.size} rows")
+                }
+            }
 
             if (processedData != null) {
                 for (row in processedData) {
@@ -668,7 +698,7 @@ class VolcanoPlotTabFragment : Fragment() {
                 showLoading(false)
             } else {
                 binding.errorText.visibility = View.VISIBLE
-                binding.errorText.text = "No differential data available"
+                binding.errorText.text = "No differential analysis data available. Please select a comparison first."
                 showLoading(false)
             }
         } catch (e: Exception) {
@@ -685,8 +715,11 @@ class VolcanoPlotTabFragment : Fragment() {
     fun refreshVolcanoPlot() {
         val curtainData = viewModel.curtainData.value
         if (curtainData != null) {
-            viewModel.searchService.saveSearchListsToCurtainData(curtainData)
-            loadVolcanoPlotDefer()
+            lifecycleScope.launch {
+                viewModel.curtainDataService.processDataAfterImport()
+                viewModel.searchService.saveSearchListsToCurtainData(curtainData)
+                loadVolcanoPlotDefer()
+            }
         }
     }
     

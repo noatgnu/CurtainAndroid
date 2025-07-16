@@ -6,16 +6,18 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import info.proteo.curtain.R
 import info.proteo.curtain.databinding.ActivityQrcodeShareBinding
 import info.proteo.curtain.presentation.fragments.qrcode.AndroidShareFragment
 import info.proteo.curtain.presentation.fragments.qrcode.WebShareFragment
 import info.proteo.curtain.utils.ThemeHelper
-import info.proteo.curtain.utils.EdgeToEdgeHelper
 
 class QRCodeShareActivity : AppCompatActivity() {
     
@@ -47,9 +49,8 @@ class QRCodeShareActivity : AppCompatActivity() {
         binding = ActivityQrcodeShareBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        // Setup edge-to-edge display
-        val appBarLayout = findViewById<View>(R.id.appBarLayout)
-        EdgeToEdgeHelper.setupActivity(this, appBarLayout, binding.viewPager)
+        // Handle window insets for proper spacing
+        setupWindowInsets()
         
         // Get data from intent
         linkId = intent.getStringExtra(EXTRA_LINK_ID) ?: ""
@@ -64,6 +65,32 @@ class QRCodeShareActivity : AppCompatActivity() {
         setupTabs()
     }
     
+    private fun setupWindowInsets() {
+        val appBarLayout = binding.appBarLayout
+        val viewPager = binding.viewPager
+        
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            // Apply top inset to app bar to extend under status bar
+            appBarLayout.setPadding(
+                appBarLayout.paddingLeft,
+                systemBars.top,
+                appBarLayout.paddingRight,
+                appBarLayout.paddingBottom
+            )
+            
+            // Apply bottom inset to view pager
+            viewPager.setPadding(
+                viewPager.paddingLeft,
+                viewPager.paddingTop,
+                viewPager.paddingRight,
+                systemBars.bottom
+            )
+            
+            insets
+        }
+    }
     
     private fun setupToolbar() {
         setSupportActionBar(binding.toolbar)

@@ -9,6 +9,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
@@ -131,21 +132,37 @@ class CurtainDetailsFragment : Fragment() {
     
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.curtain_settings_menu, menu)
+        
+        // Tint all menu icons white for better visibility against primary color toolbar
+        setupMenuIconsWhite(menu)
+        
         super.onCreateOptionsMenu(menu, inflater)
+    }
+    
+    private fun setupMenuIconsWhite(menu: Menu) {
+        val whiteColor = ContextCompat.getColor(requireContext(), R.color.white)
+        
+        // Tint all menu item icons white
+        for (i in 0 until menu.size()) {
+            val menuItem = menu.getItem(i)
+            menuItem.icon?.setTint(whiteColor)
+            
+            // Handle submenu items if any
+            if (menuItem.hasSubMenu()) {
+                val subMenu = menuItem.subMenu
+                if (subMenu != null) {
+                    for (j in 0 until subMenu.size()) {
+                        subMenu.getItem(j).icon?.setTint(whiteColor)
+                    }
+                }
+            }
+        }
     }
     
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_manage_settings -> {
                 showSettingsManagerDialog()
-                true
-            }
-            R.id.action_save_current_settings -> {
-                showSettingsManagerDialog(showSaveTab = true)
-                true
-            }
-            R.id.action_load_settings -> {
-                showSettingsManagerDialog(showSaveTab = false)
                 true
             }
             R.id.action_condition_colors -> {
@@ -164,14 +181,8 @@ class CurtainDetailsFragment : Fragment() {
         }
     }
     
-    private fun showSettingsManagerDialog(showSaveTab: Boolean = false) {
+    private fun showSettingsManagerDialog() {
         val dialog = CurtainSettingsManagerDialog.newInstance(args.curtainId)
-        if (showSaveTab) {
-            // Set arguments to show save tab initially
-            val bundle = dialog.arguments ?: Bundle()
-            bundle.putBoolean("showSaveTab", true)
-            dialog.arguments = bundle
-        }
         dialog.show(childFragmentManager, "SettingsManagerDialog")
     }
     

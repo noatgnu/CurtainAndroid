@@ -243,4 +243,143 @@ class CurtainViewModel @Inject constructor(
             return false
         }
     }
+    
+    /**
+     * Deletes a curtain from the database and refreshes the list
+     * 
+     * @param curtain The curtain entity to delete
+     */
+    fun deleteCurtain(curtain: CurtainEntity) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _error.value = null
+                
+                // Delete from repository (handles both local database and server if needed)
+                curtainRepository.deleteCurtain(curtain.sourceHostname, curtain.linkId)
+                
+                // Remove from local lists
+                _allCurtains.removeAll { it.linkId == curtain.linkId }
+                _loadedCurtains.removeAll { it.linkId == curtain.linkId }
+                
+                // Update the UI
+                _curtains.value = _loadedCurtains.toList()
+                
+                Log.d("CurtainViewModel", "Successfully deleted curtain: ${curtain.linkId}")
+                
+            } catch (e: Exception) {
+                Log.e("CurtainViewModel", "Error deleting curtain", e)
+                _error.value = "Failed to delete curtain: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Updates the description of a curtain
+     * 
+     * @param curtain The curtain entity to update
+     * @param newDescription The new description text
+     */
+    fun updateCurtainDescription(curtain: CurtainEntity, newDescription: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _error.value = null
+                
+                // Update in repository
+                curtainRepository.updateCurtainDescription(curtain.linkId, newDescription)
+                
+                // Update local lists
+                val updatedCurtain = curtain.copy(description = newDescription)
+                
+                // Update in _allCurtains
+                val allIndex = _allCurtains.indexOfFirst { it.linkId == curtain.linkId }
+                if (allIndex >= 0) {
+                    _allCurtains[allIndex] = updatedCurtain
+                }
+                
+                // Update in _loadedCurtains
+                val loadedIndex = _loadedCurtains.indexOfFirst { it.linkId == curtain.linkId }
+                if (loadedIndex >= 0) {
+                    _loadedCurtains[loadedIndex] = updatedCurtain
+                }
+                
+                // Update the UI
+                _curtains.value = _loadedCurtains.toList()
+                
+                Log.d("CurtainViewModel", "Successfully updated description for curtain: ${curtain.linkId}")
+                
+            } catch (e: Exception) {
+                Log.e("CurtainViewModel", "Error updating curtain description", e)
+                _error.value = "Failed to update description: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Toggles the pin status of a curtain
+     * 
+     * @param curtain The curtain entity to toggle pin status for
+     */
+    fun togglePinStatus(curtain: CurtainEntity) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _error.value = null
+                
+                val newPinStatus = !curtain.isPinned
+                
+                // Update in repository
+                curtainRepository.updatePinStatus(curtain.linkId, newPinStatus)
+                
+                // Update local lists
+                val updatedCurtain = curtain.copy(isPinned = newPinStatus)
+                
+                // Update in _allCurtains
+                val allIndex = _allCurtains.indexOfFirst { it.linkId == curtain.linkId }
+                if (allIndex >= 0) {
+                    _allCurtains[allIndex] = updatedCurtain
+                }
+                
+                // Update in _loadedCurtains
+                val loadedIndex = _loadedCurtains.indexOfFirst { it.linkId == curtain.linkId }
+                if (loadedIndex >= 0) {
+                    _loadedCurtains[loadedIndex] = updatedCurtain
+                }
+                
+                // Re-sort the lists to show pinned items first
+                _allCurtains.sortWith { a, b ->
+                    when {
+                        a.isPinned && !b.isPinned -> -1
+                        !a.isPinned && b.isPinned -> 1
+                        else -> b.created.compareTo(a.created) // Most recent first
+                    }
+                }
+                
+                _loadedCurtains.sortWith { a, b ->
+                    when {
+                        a.isPinned && !b.isPinned -> -1
+                        !a.isPinned && b.isPinned -> 1
+                        else -> b.created.compareTo(a.created) // Most recent first
+                    }
+                }
+                
+                // Update the UI
+                _curtains.value = _loadedCurtains.toList()
+                
+                val action = if (newPinStatus) "pinned" else "unpinned"
+                Log.d("CurtainViewModel", "Successfully ${action} curtain: ${curtain.linkId}")
+                
+            } catch (e: Exception) {
+                Log.e("CurtainViewModel", "Error toggling pin status", e)
+                _error.value = "Failed to ${if (curtain.isPinned) "unpin" else "pin"} curtain: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
 }

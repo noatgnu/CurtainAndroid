@@ -186,17 +186,19 @@ class CurtainRepository @Inject constructor(
     suspend fun deleteCurtain(hostname: String, linkId: String) {
         return withContext(Dispatchers.IO) {
             try {
-                val apiClient = createApiForHost(hostname)
-                val response = apiClient.deleteCurtain(linkId)
-
-                if (response.isSuccessful) {
-                    // Delete from local database if exists
-                    val curtain = curtainDao.getById(linkId)
-                    if (curtain != null) {
-                        curtainDao.delete(curtain)
+                // Get the curtain from local database
+                val curtain = curtainDao.getById(linkId)
+                if (curtain != null) {
+                    // Delete associated local file if it exists
+                    curtain.file?.let { filePath ->
+                        val file = File(filePath)
+                        if (file.exists()) {
+                            file.delete()
+                        }
                     }
-                } else {
-                    throw HttpException(response)
+                    
+                    // Delete from local database
+                    curtainDao.delete(curtain)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -216,6 +218,60 @@ class CurtainRepository @Inject constructor(
     suspend fun getCurtainById(linkId: String): CurtainEntity? {
         return withContext(Dispatchers.IO) {
             curtainDao.getById(linkId)
+        }
+    }
+
+    /**
+     * Creates a curtain entry locally without fetching data from the network
+     * This is used when adding curtains manually or from QR codes/URLs
+     * The actual data will be downloaded when the user clicks on the curtain
+     *
+     * @param linkId The unique ID of the curtain
+     * @param apiUrl The base URL of the API (hostname)
+     * @param frontendURL The frontend URL for the curtain (optional)
+     * @param description Optional description for the curtain
+     * @return The created curtain entity
+     */
+    suspend fun createCurtainEntry(
+        linkId: String, 
+        apiUrl: String, 
+        frontendURL: String? = null, 
+        description: String = ""
+    ): CurtainEntity {
+        return withContext(Dispatchers.IO) {
+            // Check if curtain already exists
+            val existingCurtain = curtainDao.getById(linkId)
+            if (existingCurtain != null) {
+                return@withContext existingCurtain
+            }
+
+            // Ensure site settings exist (foreign key constraint)
+            val existingSiteSettings = curtainDao.getSiteSettingsByHostname(apiUrl)
+            if (existingSiteSettings == null) {
+                val siteSettings = CurtainSiteSettings(
+                    hostname = apiUrl,
+                    active = true,
+                )
+                curtainDao.insertSiteSettings(siteSettings)
+            }
+
+            // Create curtain entity without network data
+            val curtainEntity = CurtainEntity(
+                linkId = linkId,
+                created = System.currentTimeMillis(),
+                updated = System.currentTimeMillis(),
+                file = null, // Will be populated when downloaded
+                description = description.ifEmpty { "Manual import" },
+                enable = true,
+                curtainType = "TP",
+                sourceHostname = apiUrl,
+                frontendURL = frontendURL,
+                isPinned = false
+            )
+
+            // Insert into database
+            curtainDao.insert(curtainEntity)
+            curtainEntity
         }
     }
 
@@ -460,5 +516,26 @@ class CurtainRepository @Inject constructor(
                 System.currentTimeMillis()
             }
         }
+    }
+    
+    /**
+     * Updates the pin status of a curtain
+     */
+    suspend fun updatePinStatus(linkId: String, isPinned: Boolean) {
+        return withContext(Dispatchers.IO) {
+            try {
+                curtainDao.updatePinStatus(linkId, isPinned)
+            } catch (e: Exception) {
+                android.util.Log.e("CurtainRepository", "Failed to update pin status: ${e.message}")
+                throw e
+            }
+        }
+    }
+    
+    /**
+     * Get all pinned curtains
+     */
+    fun getPinnedCurtains(): Flow<List<CurtainEntity>> {
+        return curtainDao.getPinnedCurtains()
     }
 }

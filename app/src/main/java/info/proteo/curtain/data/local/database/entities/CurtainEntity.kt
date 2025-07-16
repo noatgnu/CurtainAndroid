@@ -34,5 +34,7 @@ data class CurtainEntity(
     @ColumnInfo(name = "source_hostname")
     val sourceHostname: String,
     @ColumnInfo(name = "frontend_url")
-    val frontendURL: String? = null
+    val frontendURL: String? = null,
+    @ColumnInfo(name = "is_pinned")
+    val isPinned: Boolean = false
 )

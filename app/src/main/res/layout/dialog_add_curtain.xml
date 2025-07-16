@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:maxHeight="600dp"
+    android:fillViewport="true">
+
+<LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -11,10 +17,42 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Add a curtain by providing its unique ID and API URL. You can also paste a curtain URL to extract these parameters automatically."
+        android:text="Add a curtain by providing its unique ID and API URL. You can also paste a curtain:// URL or scan a QR code to extract these parameters automatically."
         android:textSize="14sp"
         android:textColor="?android:attr/textColorSecondary"
         android:layout_marginBottom="16dp" />
+
+    <!-- Quick Actions -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="16dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnPasteUrl"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Paste URL"
+            android:drawableStart="@drawable/ic_copy"
+            android:drawablePadding="8dp"
+            android:layout_marginEnd="8dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnScanQr"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Scan QR"
+            android:drawableStart="@drawable/ic_search"
+            android:drawablePadding="8dp"
+            android:layout_marginStart="8dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+    </LinearLayout>
 
     <!-- Unique ID Input -->
     <com.google.android.material.textfield.TextInputLayout
@@ -72,9 +110,11 @@
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/frontendURLInput"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="56dp"
             android:inputType="textUri"
-            android:singleLine="true"
+            android:maxLines="1"
+            android:scrollHorizontally="true"
+            android:ellipsize="end"
             tools:text="https://curtain.proteo.info/curtain/open/example123" />
 
     </com.google.android.material.textfield.TextInputLayout>
@@ -127,3 +167,5 @@
     </LinearLayout>
 
 </LinearLayout>
+
+</ScrollView>

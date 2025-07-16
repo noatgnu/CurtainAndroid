@@ -9,18 +9,6 @@
         app:showAsAction="ifRoom" />
     
     <item
-        android:id="@+id/action_save_current_settings"
-        android:title="Save Current Settings"
-        android:icon="@drawable/ic_save"
-        app:showAsAction="never" />
-    
-    <item
-        android:id="@+id/action_load_settings"
-        android:title="Load Settings"
-        android:icon="@drawable/ic_file_download"
-        app:showAsAction="never" />
-    
-    <item
         android:id="@+id/action_condition_colors"
         android:title="Condition Colors"
         android:icon="@drawable/ic_palette"

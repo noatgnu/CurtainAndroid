@@ -22,10 +22,33 @@
             android:textColor="?android:attr/textColorPrimary"
             android:textSize="16sp"
             android:textStyle="bold"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/ivPinIndicator"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:text="9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" />
+
+        <ImageView
+            android:id="@+id/ivPinIndicator"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_favorite"
+            android:contentDescription="Pinned"
+            android:visibility="gone"
+            app:tint="?attr/colorPrimary"
+            app:layout_constraintEnd_toStartOf="@+id/ivMenuIndicator"
+            app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginEnd="4dp" />
+
+        <ImageView
+            android:id="@+id/ivMenuIndicator"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:src="@drawable/ic_more_vert"
+            android:contentDescription="More options (long press)"
+            android:alpha="0.5"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            android:layout_marginStart="8dp" />
 
         <TextView
             android:id="@+id/tvDescription"

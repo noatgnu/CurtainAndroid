@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -21,6 +22,7 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.navigation.NavigationView
 import dagger.hilt.android.AndroidEntryPoint
@@ -56,6 +58,9 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         // Set up the toolbar
         val toolbar = findViewById<Toolbar>(R.id.toolbar)
         setSupportActionBar(toolbar)
+        
+        // Configure toolbar for edge-to-edge with white elements
+        setupToolbarStyle(toolbar)
 
         // Set up navigation
         drawerLayout = findViewById(R.id.drawerLayout)
@@ -93,13 +98,13 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     private fun setupWindowInsets() {
         val rootView = findViewById<DrawerLayout>(R.id.drawerLayout)
-        val appBarLayout = findViewById<View>(R.id.appBarLayout)
+        val appBarLayout = findViewById<AppBarLayout>(R.id.appBarLayout)
         val navHostFragment = findViewById<View>(R.id.nav_host_fragment)
         
         ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             
-            // Apply top inset to app bar
+            // Apply top inset to app bar to extend under status bar
             appBarLayout.setPadding(
                 appBarLayout.paddingLeft,
                 systemBars.top,
@@ -118,6 +123,24 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             insets
         }
     }
+    
+    private fun setupToolbarStyle(toolbar: Toolbar) {
+        // Set toolbar elements to white for better visibility over transparent status bar
+        val whiteColor = ContextCompat.getColor(this, R.color.white)
+        
+        // Set title and subtitle color to white
+        toolbar.setTitleTextColor(whiteColor)
+        toolbar.setSubtitleTextColor(whiteColor)
+        
+        // Set navigation icon (hamburger menu) to white
+        toolbar.navigationIcon?.setTint(whiteColor)
+        
+        // Set overflow menu icon to white (if present)
+        toolbar.overflowIcon?.setTint(whiteColor)
+        
+        // The popup theme for overflow menu is handled in layout XML via app:popupTheme
+        // This allows the overflow menu to follow system theme (light/dark)
+    }
 
     private fun checkCurtainDataAndUpdateUI() {
         lifecycleScope.launch {
@@ -129,7 +152,31 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
+        
+        // Tint all menu icons white for better visibility
+        setupMenuIconsWhite(menu)
+        
         return true
+    }
+    
+    private fun setupMenuIconsWhite(menu: Menu) {
+        val whiteColor = ContextCompat.getColor(this, R.color.white)
+        
+        // Tint all menu item icons white
+        for (i in 0 until menu.size()) {
+            val menuItem = menu.getItem(i)
+            menuItem.icon?.setTint(whiteColor)
+            
+            // Handle submenu items if any
+            if (menuItem.hasSubMenu()) {
+                val subMenu = menuItem.subMenu
+                if (subMenu != null) {
+                    for (j in 0 until subMenu.size()) {
+                        subMenu.getItem(j).icon?.setTint(whiteColor)
+                    }
+                }
+            }
+        }
     }
 
 

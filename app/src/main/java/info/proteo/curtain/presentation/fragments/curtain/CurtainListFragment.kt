@@ -15,11 +15,13 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import info.proteo.curtain.R
 import info.proteo.curtain.presentation.adapters.CurtainAdapter
 import info.proteo.curtain.CurtainViewModel
 import info.proteo.curtain.presentation.dialogs.AddCurtainDialog
+import info.proteo.curtain.presentation.dialogs.EditDescriptionDialog
 import info.proteo.curtain.presentation.fragments.curtain.CurtainListFragmentDirections
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
@@ -112,6 +114,30 @@ class CurtainListFragment : Fragment() {
                         ).show()
                     }
                 }
+            },
+            onEditDescription = { curtain ->
+                // Show edit description dialog
+                val dialog = EditDescriptionDialog.newInstance(curtain) { newDescription ->
+                    viewModel.updateCurtainDescription(curtain, newDescription)
+                }
+                dialog.show(parentFragmentManager, "EditDescriptionDialog")
+            },
+            onDelete = { curtain ->
+                // Show confirmation dialog before deleting
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Delete Curtain")
+                    .setMessage("Are you sure you want to delete this curtain?\n\nID: ${curtain.linkId}\nDescription: ${curtain.description.ifBlank { "No description" }}")
+                    .setPositiveButton("Delete") { _, _ ->
+                        viewModel.deleteCurtain(curtain)
+                        Toast.makeText(requireContext(), "Curtain deleted", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            },
+            onTogglePin = { curtain ->
+                viewModel.togglePinStatus(curtain)
+                val action = if (curtain.isPinned) "Unpinned" else "Pinned"
+                Toast.makeText(requireContext(), "$action curtain", Toast.LENGTH_SHORT).show()
             }
         )
         
@@ -146,12 +172,11 @@ class CurtainListFragment : Fragment() {
 
         // Set up FAB click listener
         view.findViewById<FloatingActionButton>(R.id.fabAddCurtain).setOnClickListener {
-            // TODO: Navigate to add new curtain screen
-            Toast.makeText(
-                requireContext(),
-                "Add new curtain",
-                Toast.LENGTH_SHORT
-            ).show()
+            val dialog = AddCurtainDialog.newInstance {
+                // Refresh the curtain list when a new curtain is added
+                viewModel.loadCurtains()
+            }
+            dialog.show(childFragmentManager, "AddCurtainDialog")
         }
     }
 

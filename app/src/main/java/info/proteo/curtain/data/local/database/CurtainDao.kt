@@ -13,11 +13,14 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface CurtainDao {
     // Existing CurtainEntity operations
-    @Query("SELECT * FROM curtain")
+    @Query("SELECT * FROM curtain ORDER BY is_pinned DESC, created DESC")
     fun getAll(): Flow<List<CurtainEntity>>
 
-    @Query("SELECT * FROM curtain WHERE source_hostname = :hostname")
+    @Query("SELECT * FROM curtain WHERE source_hostname = :hostname ORDER BY is_pinned DESC, created DESC")
     fun getAllByHostname(hostname: String): Flow<List<CurtainEntity>>
+    
+    @Query("SELECT * FROM curtain WHERE is_pinned = 1 ORDER BY created DESC")
+    fun getPinnedCurtains(): Flow<List<CurtainEntity>>
 
     @Query("SELECT * FROM curtain WHERE link_id = :linkId")
     suspend fun getById(linkId: String): CurtainEntity?
@@ -33,6 +36,9 @@ interface CurtainDao {
 
     @Delete
     suspend fun delete(curtain: CurtainEntity)
+    
+    @Query("UPDATE curtain SET is_pinned = :isPinned WHERE link_id = :linkId")
+    suspend fun updatePinStatus(linkId: String, isPinned: Boolean)
 
     // New CurtainSiteSettings operations
     @Query("SELECT * FROM curtain_site_settings")
