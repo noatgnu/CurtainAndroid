@@ -46,7 +46,7 @@ class AddCurtainDialog : DialogFragment() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
-            val data = result.data?.getStringExtra("SCAN_RESULT")
+            val data = result.data?.getStringExtra(info.proteo.curtain.presentation.activities.QRScannerActivity.EXTRA_SCAN_RESULT)
             if (data != null) {
                 handleScannedUrl(data)
             }
@@ -267,21 +267,8 @@ class AddCurtainDialog : DialogFragment() {
     }
     
     private fun launchQrScanner() {
-        try {
-            // Use ZXing's IntentIntegrator for QR code scanning
-            val intent = Intent("com.google.zxing.client.android.SCAN")
-            intent.putExtra("SCAN_MODE", "QR_CODE_MODE")
-            intent.putExtra("SAVE_HISTORY", false)
-            
-            qrCodeScannerLauncher.launch(intent)
-        } catch (e: Exception) {
-            // If ZXing app is not installed, show a message
-            Toast.makeText(
-                requireContext(),
-                "Please install a QR code scanner app (like ZXing Barcode Scanner)",
-                Toast.LENGTH_LONG
-            ).show()
-        }
+        val intent = info.proteo.curtain.presentation.activities.QRScannerActivity.createIntent(requireContext())
+        qrCodeScannerLauncher.launch(intent)
     }
     
     private fun handleScannedUrl(url: String) {

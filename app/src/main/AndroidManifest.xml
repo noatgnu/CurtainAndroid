@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
 
     <application
         android:allowBackup="true"
@@ -66,6 +67,13 @@
             android:exported="false"
             android:theme="@style/Theme.Curtain"
             android:parentActivityName=".MainActivity" />
+            
+        <activity
+            android:name=".presentation.activities.QRScannerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Curtain"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="portrait" />
 
         <!-- FileProvider for sharing QR codes -->
         <provider
