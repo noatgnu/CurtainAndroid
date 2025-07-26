@@ -1099,6 +1099,9 @@ class VolcanoPlotTabFragment : Fragment() {
                 backgroundTrace.marker.opacity = 0.3;
             }
 
+            // Reverse traces array to match Angular implementation (selections appear on top)
+            traces.reverse();
+            
             // Create the plot with all traces
             Plotly.newPlot('plot', traces, layout, {responsive: true});
         </script>
