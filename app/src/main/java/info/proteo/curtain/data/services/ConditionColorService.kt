@@ -310,12 +310,14 @@ class ConditionColorService @Inject constructor(
 
     /**
      * Import color mappings from curtain settings
+     * Follows Angular frontend priority: barchartColorMap > colorMap
      */
     fun importFromCurtainSettings(
         colorMap: Map<String, String>,
         sampleMap: Map<String, Map<String, String>>,
         defaultColorList: List<String>,
-        conditionOrder: List<String>? = null
+        conditionOrder: List<String>? = null,
+        barchartColorMap: Map<String, Any> = mapOf()
     ) {
         val conditions = mutableSetOf<String>()
         
@@ -329,17 +331,32 @@ class ConditionColorService @Inject constructor(
         
         val updatedColors = mutableMapOf<String, String>()
         
-        // Use colors from curtain settings colorMap if available
+        // Use priority system: barchartColorMap > colorMap > default palette
         conditions.forEach { condition ->
-            val color = colorMap[condition]
-            if (!color.isNullOrEmpty() && isValidHexColor(color)) {
-                updatedColors[condition] = color
-            } else {
-                // Assign from default color list or current palette
+            var color: String? = null
+            
+            // First priority: barchartColorMap (specific bar chart colors)
+            val barchartColor = barchartColorMap[condition] as? String
+            if (!barchartColor.isNullOrEmpty() && isValidHexColor(barchartColor)) {
+                color = barchartColor
+            }
+            
+            // Second priority: colorMap (general condition colors)
+            if (color == null) {
+                val generalColor = colorMap[condition]
+                if (!generalColor.isNullOrEmpty() && isValidHexColor(generalColor)) {
+                    color = generalColor
+                }
+            }
+            
+            // Third priority: assign from palette
+            if (color == null) {
                 val palette = if (defaultColorList.isNotEmpty()) defaultColorList else getCurrentPaletteColors()
                 val colorIndex = conditions.indexOf(condition) % palette.size
-                updatedColors[condition] = palette[colorIndex]
+                color = palette[colorIndex]
             }
+            
+            updatedColors[condition] = color
         }
         
         _conditionColors.value = updatedColors
@@ -425,5 +442,40 @@ class ConditionColorService @Inject constructor(
             jsonArray.put(condition)
         }
         sharedPrefs.edit { putString(KEY_CONDITION_ORDER, jsonArray.toString()) }
+    }
+
+    /**
+     * Export current condition colors to be saved in curtain settings barchartColorMap
+     * This ensures that color changes are reflected back to the settings
+     */
+    fun exportToBarchartColorMap(): Map<String, String> {
+        return _conditionColors.value.toMap()
+    }
+
+    /**
+     * Check if current colors differ from the provided colorMap (general colors)
+     * Used to determine if colors should be saved to barchartColorMap as overrides
+     */
+    fun hasColorOverrides(generalColorMap: Map<String, String>): Boolean {
+        val currentColors = _conditionColors.value
+        return currentColors.any { (condition, color) ->
+            generalColorMap[condition] != color
+        }
+    }
+
+    /**
+     * Get colors that differ from the general colorMap and should be saved as overrides
+     */
+    fun getColorOverrides(generalColorMap: Map<String, String>): Map<String, String> {
+        val currentColors = _conditionColors.value
+        val overrides = mutableMapOf<String, String>()
+        
+        currentColors.forEach { (condition, color) ->
+            if (generalColorMap[condition] != color) {
+                overrides[condition] = color
+            }
+        }
+        
+        return overrides
     }
 }

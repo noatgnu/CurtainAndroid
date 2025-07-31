@@ -14,11 +14,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import info.proteo.curtain.R
 import info.proteo.curtain.databinding.ActivityQrScannerBinding
-import info.proteo.curtain.utils.EdgeToEdgeHelper
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -47,7 +49,11 @@ class QRScannerActivity : AppCompatActivity() {
         binding = ActivityQrScannerBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        EdgeToEdgeHelper.setupActivity(this, binding.toolbar, binding.previewView)
+        // Enable edge-to-edge display
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        // Handle window insets for proper spacing
+        setupWindowInsets()
         
         setupToolbar()
         setupUI()
@@ -62,6 +68,34 @@ class QRScannerActivity : AppCompatActivity() {
         }
     }
     
+    private fun setupWindowInsets() {
+        val rootView = binding.root // Use the actual root view from binding
+        val toolbar = binding.toolbar
+        val controlsLayout = binding.controlsLayout
+        
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            
+            // Apply top inset to toolbar to extend under status bar
+            toolbar.setPadding(
+                toolbar.paddingLeft,
+                systemBars.top,
+                toolbar.paddingRight,
+                toolbar.paddingBottom
+            )
+            
+            // Apply bottom inset to controls layout
+            controlsLayout.setPadding(
+                controlsLayout.paddingLeft,
+                controlsLayout.paddingTop,
+                controlsLayout.paddingRight,
+                systemBars.bottom
+            )
+            
+            insets
+        }
+    }
+
     private fun setupToolbar() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.apply {
@@ -127,6 +161,13 @@ class QRScannerActivity : AppCompatActivity() {
                     View.GONE
                 }
                 
+                // Observe torch state to update icon
+                camera?.cameraInfo?.torchState?.observe(this) { torchState ->
+                    // torchState is an Int (TorchState.OFF = 0, TorchState.ON = 1)
+                    val isOn = torchState == androidx.camera.core.TorchState.ON
+                    updateFlashlightIcon(isOn)
+                }
+                
             } catch (exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
                 Toast.makeText(this, "Failed to start camera", Toast.LENGTH_SHORT).show()
@@ -139,11 +180,26 @@ class QRScannerActivity : AppCompatActivity() {
     private fun toggleFlashlight() {
         camera?.let { cam ->
             if (cam.cameraInfo.hasFlashUnit()) {
-                val currentTorchState = cam.cameraInfo.torchState.value as? Boolean ?: false
-                val newTorchState = if (currentTorchState) false else true
+                // Get current torch state (Int value: TorchState.OFF = 0, TorchState.ON = 1)
+                val currentTorchState = cam.cameraInfo.torchState.value ?: androidx.camera.core.TorchState.OFF
+                val isCurrentlyOn = currentTorchState == androidx.camera.core.TorchState.ON
+                val newTorchState = !isCurrentlyOn
+                
+                Log.d(TAG, "Torch toggle: current=$currentTorchState (isOn=$isCurrentlyOn), setting to=$newTorchState")
                 cam.cameraControl.enableTorch(newTorchState)
             }
         }
+    }
+    
+    private fun updateFlashlightIcon(torchState: Boolean) {
+        val iconRes = if (torchState) {
+            R.drawable.ic_flashlight_on
+        } else {
+            R.drawable.ic_flashlight
+        }
+        
+        Log.d(TAG, "Updating flashlight icon: torchState=$torchState, iconRes=$iconRes")
+        binding.btnFlashlight.setIconResource(iconRes)
     }
     
     private fun handleScannedBarcode(barcode: String) {

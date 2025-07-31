@@ -112,7 +112,8 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
                 appBarLayout.paddingBottom
             )
             
-            // Apply bottom inset to nav host fragment
+            // Apply bottom inset to nav host fragment for most fragments
+            // CurtainDetailsFragment will override this for selective tab handling
             navHostFragment.setPadding(
                 navHostFragment.paddingLeft,
                 navHostFragment.paddingTop,

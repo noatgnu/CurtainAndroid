@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
+import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayoutMediator
 import dagger.hilt.android.AndroidEntryPoint
 import info.proteo.curtain.databinding.FragmentCurtainDetailsBinding
@@ -27,6 +28,8 @@ import info.proteo.curtain.presentation.fragments.curtain.CurtainDetailsFragment
 import info.proteo.curtain.presentation.dialogs.CurtainSettingsManagerDialog
 import info.proteo.curtain.presentation.dialogs.ConditionColorManagementDialog
 import info.proteo.curtain.presentation.dialogs.ProteinSearchDialog
+import info.proteo.curtain.presentation.dialogs.SampleConditionAssignmentDialog
+import info.proteo.curtain.presentation.dialogs.TraceColorManagementDialog
 import info.proteo.curtain.data.services.SearchService
 import info.proteo.curtain.R
 import info.proteo.curtain.utils.EdgeToEdgeHelper
@@ -67,7 +70,8 @@ class CurtainDetailsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        EdgeToEdgeHelper.setupFragment(this, binding.root, contentView = binding.viewPager)
+        // Setup consolidated edge-to-edge handling
+        setupConsolidatedInsetHandling()
 
         // Show loading state immediately
         showLoadingState(true)
@@ -112,6 +116,9 @@ class CurtainDetailsFragment : Fragment() {
         // Setup ViewPager2 with adapter
         binding.viewPager.adapter = pagerAdapter
 
+        // Setup selective bottom padding based on tab
+        // Inset handling is now consolidated in setupConsolidatedInsetHandling()
+
         // Connect TabLayout with ViewPager2
         TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
             when (position) {
@@ -120,6 +127,62 @@ class CurtainDetailsFragment : Fragment() {
                 2 -> tab.text = "Protein Details"
             }
         }.attach()
+    }
+    
+    private fun setupConsolidatedInsetHandling() {
+        // Override MainActivity's nav host padding for this fragment
+        // and handle insets specifically for the tab-based content
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            
+            // Remove bottom padding from nav host fragment for this fragment
+            val navHostFragment = requireActivity().findViewById<View>(R.id.nav_host_fragment)
+            navHostFragment?.setPadding(
+                navHostFragment.paddingLeft,
+                navHostFragment.paddingTop,
+                navHostFragment.paddingRight,
+                0  // Remove bottom padding applied by MainActivity
+            )
+            
+            // Apply horizontal insets to root for edge-to-edge
+            view.setPadding(
+                systemBars.left,
+                view.paddingTop,
+                systemBars.right,
+                view.paddingBottom // Don't apply bottom insets to root
+            )
+            
+            // Apply selective bottom padding to ViewPager based on current tab
+            applySelectiveBottomPadding(systemBars.bottom)
+            
+            // Return insets without consuming them completely
+            insets
+        }
+        
+        // Update padding when page changes
+        binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                super.onPageSelected(position)
+                // Reapply insets when tab changes
+                androidx.core.view.ViewCompat.requestApplyInsets(binding.root)
+            }
+        })
+    }
+    
+    private fun applySelectiveBottomPadding(bottomInset: Int) {
+        // Apply selective bottom padding based on tab content needs
+        val currentItem = binding.viewPager.currentItem
+        val bottomPadding = when (currentItem) {
+            1 -> 0 // Volcano plot (index 1) handles its own insets, no ViewPager padding needed
+            else -> bottomInset // Other tabs get full padding (nav host padding was removed)
+        }
+        
+        binding.viewPager.setPadding(
+            binding.viewPager.paddingLeft,
+            binding.viewPager.paddingTop,
+            binding.viewPager.paddingRight,
+            bottomPadding
+        )
     }
 
     private fun showLoadingState(isLoading: Boolean) {
@@ -169,12 +232,20 @@ class CurtainDetailsFragment : Fragment() {
                 showConditionColorsDialog()
                 true
             }
+            R.id.action_sample_conditions -> {
+                showSampleConditionAssignmentDialog()
+                true
+            }
             R.id.action_protein_search -> {
                 showProteinSearchDialog()
                 true
             }
             R.id.action_share_qr_code -> {
                 showQRCodeShare()
+                true
+            }
+            R.id.action_trace_colors -> {
+                showTraceColorsDialog()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -188,8 +259,30 @@ class CurtainDetailsFragment : Fragment() {
     
     private fun showConditionColorsDialog() {
         // Show condition color management dialog
-        val dialog = ConditionColorManagementDialog.newInstance()
+        val dialog = ConditionColorManagementDialog.newInstance(
+            onColorsUpdated = {
+                // Refresh all chart tabs when colors are updated
+                refreshChartTabs()
+            }
+        )
         dialog.show(childFragmentManager, "ConditionColorsDialog")
+    }
+    
+    private fun showSampleConditionAssignmentDialog() {
+        // Show sample condition assignment dialog
+        val dialog = SampleConditionAssignmentDialog.newInstance(
+            onConditionsUpdated = {
+                // Refresh all chart tabs when conditions are updated
+                refreshChartTabs()
+            }
+        )
+        dialog.show(childFragmentManager, "SampleConditionAssignmentDialog")
+    }
+    
+    private fun showTraceColorsDialog() {
+        // Show trace color management dialog for volcano plot
+        val dialog = TraceColorManagementDialog.newInstance()
+        dialog.show(childFragmentManager, "TraceColorsDialog")
     }
     
     private fun showProteinSearchDialog() {
@@ -218,14 +311,55 @@ class CurtainDetailsFragment : Fragment() {
             ).show()
         }
     }
+    
+    private fun refreshChartTabs() {
+        // Notify the adapter to refresh fragments that contain charts
+        pagerAdapter.notifyDataSetChanged()
+        
+        // Also specifically refresh the protein details tab if it's currently visible
+        val currentItem = binding.viewPager.currentItem
+        if (currentItem == 2) { // Protein Details tab index
+            // Force refresh of the current fragment
+            val fragment = childFragmentManager.findFragmentByTag("f$currentItem")
+            if (fragment is ProteinDetailListTabFragment) {
+                fragment.refreshChartsWithNewColors()
+            }
+        }
+    }
 
     override fun onDestroyView() {
         super.onDestroyView()
+
+        // Restore nav host fragment's bottom padding for other fragments
+        restoreNavHostBottomPadding()
 
         if (!requireActivity().isChangingConfigurations) {
             viewModel.clearMemory()
         }
 
         _binding = null
+    }
+    
+    private fun restoreNavHostBottomPadding() {
+        try {
+            val navHostFragment = requireActivity().findViewById<View>(R.id.nav_host_fragment)
+            navHostFragment?.let { navHost ->
+                // Get current window insets to restore proper bottom padding
+                androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(navHost) { view, insets ->
+                    val systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    view.setPadding(
+                        view.paddingLeft,
+                        view.paddingTop,
+                        view.paddingRight,
+                        systemBars.bottom  // Restore bottom padding for other fragments
+                    )
+                    insets
+                }
+                // Request insets to be applied immediately
+                androidx.core.view.ViewCompat.requestApplyInsets(navHost)
+            }
+        } catch (e: Exception) {
+            // Fragment might be detached, ignore
+        }
     }
 }

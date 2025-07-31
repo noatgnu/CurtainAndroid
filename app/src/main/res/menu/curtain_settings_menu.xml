@@ -5,13 +5,25 @@
     <item
         android:id="@+id/action_manage_settings"
         android:title="Manage Settings"
-        android:icon="@drawable/ic_settings_variant"
+        android:icon="@drawable/ic_settings"
         app:showAsAction="ifRoom" />
     
     <item
         android:id="@+id/action_condition_colors"
         android:title="Condition Colors"
         android:icon="@drawable/ic_palette"
+        app:showAsAction="never" />
+    
+    <item
+        android:id="@+id/action_sample_conditions"
+        android:title="Sample Conditions"
+        android:icon="@drawable/ic_edit"
+        app:showAsAction="never" />
+    
+    <item
+        android:id="@+id/action_trace_colors"
+        android:title="Trace Colors"
+        android:icon="@drawable/ic_color_palette"
         app:showAsAction="never" />
     
     <item

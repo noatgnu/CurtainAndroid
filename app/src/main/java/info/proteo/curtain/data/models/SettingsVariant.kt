@@ -116,6 +116,7 @@ data class PlotSettings(
     @Json(name = "customVolcanoTextCol") val customVolcanoTextCol: String? = null,
     @Json(name = "fdrCurveText") val fdrCurveText: String = "",
     @Json(name = "fdrCurveTextEnable") val fdrCurveTextEnable: Boolean = false,
+    @Json(name = "textAnnotation") val textAnnotation: Map<String, Any> = emptyMap(),
     
     // Chart-specific Settings
     @Json(name = "chartType") val chartType: String = "INDIVIDUAL_BAR",

@@ -348,19 +348,19 @@ class CurtainRepository @Inject constructor(
         linkId: String,
         hostname: String,
         token: String? = null,
-        progressCallback: ((Int) -> Unit)? = null,
+        progressCallback: ((Int, Double) -> Unit)? = null,
         forceDownload: Boolean = false
     ): String {
         return withContext(Dispatchers.IO) {
             try {
-                progressCallback?.invoke(0) // Start at 0%
+                progressCallback?.invoke(0, 0.0) // Start at 0%
 
                 // Check if we already have the file locally and not forcing a redownload
                 val localFilePath = getLocalFilePath(linkId)
                 if (!forceDownload && File(localFilePath).exists()) {
                     // If file exists, make sure the entity has the file path set
                     updateCurtainEntityWithLocalFilePath(linkId, localFilePath)
-                    progressCallback?.invoke(100) // Already complete
+                    progressCallback?.invoke(100, 0.0) // Already complete
                     return@withContext localFilePath
                 }
 
@@ -372,11 +372,11 @@ class CurtainRepository @Inject constructor(
                     "$linkId/download/token="
                 }
 
-                progressCallback?.invoke(10) // API request started
+                progressCallback?.invoke(10, 0.0) // API request started
                 val response = apiClient.downloadCurtain(downloadEndpoint)
 
                 if (response.isSuccessful && response.body() != null) {
-                    progressCallback?.invoke(20)
+                    progressCallback?.invoke(20, 0.0)
                     val responseBody = response.body()!!
 
                     val responseString = responseBody.string()
@@ -387,11 +387,11 @@ class CurtainRepository @Inject constructor(
                         val jsonAdapter = moshi.adapter(Map::class.java)
                         val jsonMap = jsonAdapter.fromJson(responseString)
 
-                        progressCallback?.invoke(30)
+                        progressCallback?.invoke(30, 0.0)
 
                         if (jsonMap?.containsKey("url") == true) {
                             val downloadUrl = jsonMap["url"] as String
-                            progressCallback?.invoke(40) // Starting file download
+                            progressCallback?.invoke(40, 0.0) // Starting file download
 
                             // Ensure we have an absolute URL
                             val absoluteUrl = if (downloadUrl.startsWith("http")) {
@@ -407,36 +407,36 @@ class CurtainRepository @Inject constructor(
                             val file = downloadClient.downloadFile(
                                 url = absoluteUrl,
                                 destinationPath = getLocalFilePath(linkId),
-                                progressCallback = { progress ->
+                                progressCallback = { progress, speed ->
                                     val mappedProgress = (progress * 50 / 100) + 40
-                                    progressCallback?.invoke(mappedProgress.coerceIn(0, 90))
+                                    progressCallback?.invoke(mappedProgress.coerceIn(0, 90), speed)
                                 }
                             )
 
                             filePath = file.absolutePath
                         } else {
-                            progressCallback?.invoke(40) // Writing direct response to file
+                            progressCallback?.invoke(40, 0.0) // Writing direct response to file
                             val file = File(getLocalFilePath(linkId))
                             file.outputStream().use { outputStream ->
                                 outputStream.write(responseString.toByteArray())
-                                progressCallback?.invoke(70)
+                                progressCallback?.invoke(70, 0.0)
                             }
                             filePath = file.absolutePath
                         }
                     } catch (e: Exception) {
-                        progressCallback?.invoke(40) // Fallback to raw response
+                        progressCallback?.invoke(40, 0.0) // Fallback to raw response
                         val file = File(getLocalFilePath(linkId))
                         file.outputStream().use { outputStream ->
                             outputStream.write(responseString.toByteArray())
-                            progressCallback?.invoke(70)
+                            progressCallback?.invoke(70, 0.0)
                         }
                         filePath = file.absolutePath
                     }
 
                     if (filePath != null) {
-                        progressCallback?.invoke(90) // Updating database
+                        progressCallback?.invoke(90, 0.0) // Updating database
                         updateCurtainEntityWithLocalFilePath(linkId, filePath)
-                        progressCallback?.invoke(100) // Complete
+                        progressCallback?.invoke(100, 0.0) // Complete
                     }
 
                     return@withContext filePath ?: throw Exception("Failed to save downloaded file")
@@ -445,7 +445,7 @@ class CurtainRepository @Inject constructor(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                progressCallback?.invoke(0) // Reset progress on error
+                progressCallback?.invoke(0, 0.0) // Reset progress on error
                 throw Exception("Failed to download curtain data: ${e.message}")
             }
         }
@@ -537,5 +537,12 @@ class CurtainRepository @Inject constructor(
      */
     fun getPinnedCurtains(): Flow<List<CurtainEntity>> {
         return curtainDao.getPinnedCurtains()
+    }
+
+    /**
+     * Cancels the current download operation
+     */
+    fun cancelDownload() {
+        downloadClient.cancelDownload()
     }
 }

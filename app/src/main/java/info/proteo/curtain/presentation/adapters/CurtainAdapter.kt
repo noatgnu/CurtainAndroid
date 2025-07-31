@@ -45,9 +45,6 @@ class CurtainAdapter(
         private val tvDescription: TextView = itemView.findViewById(R.id.tvDescription)
         private val tvType: TextView = itemView.findViewById(R.id.tvType)
         private val tvFileSize: TextView = itemView.findViewById(R.id.tvFileSize)
-        private val btnDownloadContainer: LinearLayout = itemView.findViewById(R.id.btnDownloadContainer)
-        private val btnActionIcon: ImageView = itemView.findViewById(R.id.btnActionIcon)
-        private val tvActionLabel: TextView = itemView.findViewById(R.id.tvActionLabel)
         private val ivMenuIndicator: ImageView = itemView.findViewById(R.id.ivMenuIndicator)
         private val ivPinIndicator: ImageView = itemView.findViewById(R.id.ivPinIndicator)
 
@@ -67,34 +64,18 @@ class CurtainAdapter(
             // Show/hide pin indicator based on pin status
             ivPinIndicator.visibility = if (curtain.isPinned) View.VISIBLE else View.GONE
 
-            // Display file size and update button state based on file existence
-            val hasDownloadedFile = curtain.file?.let { filePath ->
+            // Display file size
+            curtain.file?.let { filePath ->
                 val file = File(filePath)
                 if (file.exists()) {
                     val sizeString = formatFileSize(file.length())
                     tvFileSize.text = sizeString
                     tvFileSize.visibility = View.VISIBLE
-                    true
                 } else {
                     tvFileSize.visibility = View.GONE
-                    false
                 }
             } ?: run {
                 tvFileSize.visibility = View.GONE
-                false
-            }
-
-            // Update button appearance based on download state
-            if (hasDownloadedFile) {
-                // File exists - show resync option
-                btnActionIcon.setImageResource(R.drawable.ic_refresh)
-                tvActionLabel.text = "Resync"
-                btnDownloadContainer.contentDescription = "Resync data"
-            } else {
-                // No file - show download option
-                btnActionIcon.setImageResource(R.drawable.ic_download)
-                tvActionLabel.text = "Download"
-                btnDownloadContainer.contentDescription = "Download data"
             }
 
             // Set click listeners
@@ -108,9 +89,6 @@ class CurtainAdapter(
                 true
             }
 
-            btnDownloadContainer.setOnClickListener {
-                onRedownloadClick(curtain)
-            }
             
             // Also allow clicking the menu indicator to show context menu
             ivMenuIndicator.setOnClickListener {
@@ -132,10 +110,28 @@ class CurtainAdapter(
                 pinMenuItem.setIcon(R.drawable.ic_favorite_border)
             }
             
+            // Update download/resync menu item based on file status
+            val downloadMenuItem = popup.menu.findItem(R.id.action_download_resync)
+            val hasDownloadedFile = curtain.file?.let { filePath ->
+                File(filePath).exists()
+            } ?: false
+            
+            if (hasDownloadedFile) {
+                downloadMenuItem.title = "Resync"
+                downloadMenuItem.setIcon(R.drawable.ic_refresh)
+            } else {
+                downloadMenuItem.title = "Download"
+                downloadMenuItem.setIcon(R.drawable.ic_download)
+            }
+            
             popup.setOnMenuItemClickListener { menuItem ->
                 when (menuItem.itemId) {
                     R.id.action_toggle_pin -> {
                         onTogglePin(curtain)
+                        true
+                    }
+                    R.id.action_download_resync -> {
+                        onRedownloadClick(curtain)
                         true
                     }
                     R.id.action_edit_description -> {

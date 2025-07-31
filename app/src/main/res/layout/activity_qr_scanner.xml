@@ -28,7 +28,7 @@
         app:layout_constraintBottom_toTopOf="@+id/controlsLayout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/toolbar"
+        app:layout_constraintTop_toTopOf="parent"
         app:scaleType="fillCenter" />
 
     <!-- Scanning Overlay -->
@@ -47,7 +47,9 @@
         android:id="@+id/instructionsText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
         android:background="@drawable/rounded_background_semi_transparent"
         android:gravity="center"
         android:padding="12dp"
@@ -74,16 +76,15 @@
         <!-- Flashlight Button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnFlashlight"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
             android:layout_marginEnd="16dp"
-            android:drawableTop="@drawable/ic_flashlight"
-            android:text="Flash"
-            android:textColor="@color/white"
+            android:contentDescription="Toggle flashlight"
             app:backgroundTint="@color/primary"
-            app:cornerRadius="8dp"
+            app:cornerRadius="28dp"
             app:icon="@drawable/ic_flashlight"
-            app:iconGravity="top"
+            app:iconGravity="textStart"
+            app:iconSize="24dp"
             app:iconTint="@color/white"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
 

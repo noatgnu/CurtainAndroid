@@ -37,18 +37,21 @@
             app:tint="?attr/colorPrimary"
             app:layout_constraintEnd_toStartOf="@+id/ivMenuIndicator"
             app:layout_constraintTop_toTopOf="parent"
-            android:layout_marginEnd="4dp" />
+            android:layout_marginEnd="16dp" />
 
         <ImageView
             android:id="@+id/ivMenuIndicator"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
             android:src="@drawable/ic_more_vert"
             android:contentDescription="More options (long press)"
-            android:alpha="0.5"
+            android:alpha="0.6"
+            android:background="?attr/selectableItemBackgroundBorderless"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            android:layout_marginStart="8dp" />
+            android:layout_marginEnd="-8dp"
+            android:layout_marginTop="-8dp" />
 
         <TextView
             android:id="@+id/tvDescription"
@@ -94,36 +97,6 @@
             app:layout_constraintBottom_toBottomOf="@+id/tvType"
             tools:text="File size: 1.2 MB" />
 
-        <LinearLayout
-            android:id="@+id/btnDownloadContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:background="?attr/selectableItemBackground"
-            android:padding="8dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/tvDescription"
-            app:layout_goneMarginTop="16dp"
-            app:layout_constraintBottom_toBottomOf="@+id/tvType">
-
-            <ImageView
-                android:id="@+id/btnActionIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_download"
-                android:contentDescription="Download" />
-
-            <TextView
-                android:id="@+id/tvActionLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="Download"
-                android:textSize="10sp"
-                android:textColor="?android:attr/textColorSecondary" />
-
-        </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.cardview.widget.CardView>

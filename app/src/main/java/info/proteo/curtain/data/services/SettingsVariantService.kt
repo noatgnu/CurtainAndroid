@@ -154,8 +154,25 @@ class SettingsVariantService @Inject constructor(
             }
 
             val json = variantFile.readText(StandardCharsets.UTF_8)
+            
+            // Debug logging for JSON content
+            android.util.Log.d("SettingsVariantService", "Loading variant $variantId, JSON length: ${json.length}")
+            if (json.contains("textAnnotation")) {
+                android.util.Log.d("SettingsVariantService", "JSON contains 'textAnnotation' field")
+                val textAnnotationIndex = json.indexOf("textAnnotation")
+                val snippet = json.substring(maxOf(0, textAnnotationIndex - 50), minOf(json.length, textAnnotationIndex + 200))
+                android.util.Log.d("SettingsVariantService", "textAnnotation JSON snippet: $snippet")
+            } else {
+                android.util.Log.w("SettingsVariantService", "JSON does NOT contain 'textAnnotation' field")
+            }
+            
             val variant = settingsVariantAdapter.fromJson(json)
                 ?: return@withContext Result.failure(Exception("Failed to parse settings variant"))
+
+            // Debug logging for deserialized variant
+            android.util.Log.d("SettingsVariantService", "Loaded variant '${variant.name}' with textAnnotation: size=${variant.plotSettings.textAnnotation.size}")
+            android.util.Log.d("SettingsVariantService", "textAnnotation keys: ${variant.plotSettings.textAnnotation.keys}")
+            android.util.Log.d("SettingsVariantService", "textAnnotation full map: ${variant.plotSettings.textAnnotation}")
 
             _currentVariant.value = variant
             Result.success(variant)
@@ -486,6 +503,7 @@ class SettingsVariantService @Inject constructor(
 
     private fun capturePlotSettings(curtainDataService: CurtainDataService): PlotSettings {
         val currentCurtainSettings = curtainDataService.curtainSettings
+        
         return PlotSettings(
             volcanoAxis = currentCurtainSettings.volcanoAxis?.let { axis ->
                 VolcanoAxisSettings(
@@ -494,7 +512,9 @@ class SettingsVariantService @Inject constructor(
                     minY = axis.minY,
                     maxY = axis.maxY
                 )
-            }
+            },
+            volcanoPlotTitle = currentCurtainSettings.volcanoPlotTitle,
+            textAnnotation = currentCurtainSettings.textAnnotation
         )
     }
 
@@ -590,6 +610,9 @@ class SettingsVariantService @Inject constructor(
     private suspend fun applyPlotSettings(settings: PlotSettings, curtainDataService: CurtainDataService) {
         // Update curtain settings with plot-specific settings
         val currentSettings = curtainDataService.curtainSettings
+        
+        val newTextAnnotation = if (settings.textAnnotation.isNotEmpty()) settings.textAnnotation else currentSettings.textAnnotation
+        
         curtainDataService.curtainSettings = currentSettings.copy(
             volcanoAxis = settings.volcanoAxis?.let { axis ->
                 VolcanoAxis(
@@ -598,8 +621,12 @@ class SettingsVariantService @Inject constructor(
                     minY = axis.minY,
                     maxY = axis.maxY
                 )
-            } ?: currentSettings.volcanoAxis
+            } ?: currentSettings.volcanoAxis,
+            volcanoPlotTitle = settings.volcanoPlotTitle.ifEmpty { currentSettings.volcanoPlotTitle },
+            textAnnotation = newTextAnnotation
         )
+        
+        android.util.Log.d("SettingsVariantService", "Applied plot settings. New curtainSettings textAnnotation: size=${curtainDataService.curtainSettings.textAnnotation.size}")
     }
 
     private suspend fun applyAppPreferences(preferences: AppPreferences) {

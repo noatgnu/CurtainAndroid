@@ -54,6 +54,8 @@ class CurtainListFragment : Fragment() {
         val downloadProgressContainer = view.findViewById<View>(R.id.downloadProgressContainer)
         val downloadProgressBar = view.findViewById<ProgressBar>(R.id.downloadProgressBar)
         val downloadProgressText = view.findViewById<TextView>(R.id.tvDownloadProgress)
+        val downloadSpeedText = view.findViewById<TextView>(R.id.tvDownloadSpeed)
+        val cancelDownloadButton = view.findViewById<Button>(R.id.btnCancelDownload)
         val contentContainer = view.findViewById<LinearLayout>(R.id.contentContainer)
         val paginationInfo = view.findViewById<TextView>(R.id.paginationInfo)
         val loadMoreLayout = view.findViewById<LinearLayout>(R.id.loadMoreLayout)
@@ -86,6 +88,7 @@ class CurtainListFragment : Fragment() {
                         downloadProgressContainer?.visibility = View.VISIBLE
                         downloadProgressBar?.progress = 0
                         downloadProgressText?.text = "0%"
+                        downloadSpeedText?.text = "0 KB/s"
 
                         // Redownload curtain data (force download and delete old data)
                         viewModel.redownloadCurtainData(curtain)
@@ -170,6 +173,12 @@ class CurtainListFragment : Fragment() {
             viewModel.loadMoreCurtains()
         }
 
+        // Set up cancel download button
+        cancelDownloadButton?.setOnClickListener {
+            viewModel.cancelDownload()
+            Toast.makeText(requireContext(), "Download cancelled", Toast.LENGTH_SHORT).show()
+        }
+
         // Set up FAB click listener
         view.findViewById<FloatingActionButton>(R.id.fabAddCurtain).setOnClickListener {
             val dialog = AddCurtainDialog.newInstance {
@@ -185,6 +194,7 @@ class CurtainListFragment : Fragment() {
         val emptyStateView = requireView().findViewById<TextView>(R.id.tvEmptyState)
         val downloadProgressBar = requireView().findViewById<ProgressBar>(R.id.downloadProgressBar)
         val downloadProgressText = requireView().findViewById<TextView>(R.id.tvDownloadProgress)
+        val downloadSpeedText = requireView().findViewById<TextView>(R.id.tvDownloadSpeed)
         val downloadProgressContainer = requireView().findViewById<View>(R.id.downloadProgressContainer)
         val contentContainer = requireView().findViewById<LinearLayout>(R.id.contentContainer)
         val paginationInfo = requireView().findViewById<TextView>(R.id.paginationInfo)
@@ -205,6 +215,22 @@ class CurtainListFragment : Fragment() {
             viewModel.downloadProgress.collectLatest { progress ->
                 downloadProgressBar?.progress = progress
                 downloadProgressText?.text = "$progress%"
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            // Observe download speed
+            viewModel.downloadSpeed.collectLatest { speed ->
+                val speedText = if (speed > 0) {
+                    if (speed >= 1024) {
+                        String.format("%.1f MB/s", speed / 1024.0)
+                    } else {
+                        String.format("%.0f KB/s", speed)
+                    }
+                } else {
+                    "0 KB/s"
+                }
+                downloadSpeedText?.text = speedText
             }
         }
 

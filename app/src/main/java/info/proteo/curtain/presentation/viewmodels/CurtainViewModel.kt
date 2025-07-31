@@ -44,6 +44,9 @@ class CurtainViewModel @Inject constructor(
     private val _downloadProgress = MutableStateFlow(0)
     val downloadProgress: StateFlow<Int> = _downloadProgress
 
+    private val _downloadSpeed = MutableStateFlow(0.0)
+    val downloadSpeed: StateFlow<Double> = _downloadSpeed
+
     private val _isDownloading = MutableStateFlow(false)
     val isDownloading: StateFlow<Boolean> = _isDownloading
     
@@ -152,6 +155,7 @@ class CurtainViewModel @Inject constructor(
     suspend fun downloadCurtainData(curtain: CurtainEntity): String {
         _isDownloading.value = true
         _downloadProgress.value = 0
+        _downloadSpeed.value = 0.0
         _error.value = null
 
         try {
@@ -159,8 +163,9 @@ class CurtainViewModel @Inject constructor(
             val result = curtainRepository.downloadCurtainData(
                 linkId = curtain.linkId,
                 hostname = curtain.sourceHostname,
-                progressCallback = { progress ->
+                progressCallback = { progress, speed ->
                     _downloadProgress.value = progress
+                    _downloadSpeed.value = speed
                 }
             )
 
@@ -168,6 +173,7 @@ class CurtainViewModel @Inject constructor(
             return result
         } catch (e: Exception) {
             _isDownloading.value = false
+            _downloadSpeed.value = 0.0
             _error.value = e.message
             throw e
         }
@@ -183,6 +189,7 @@ class CurtainViewModel @Inject constructor(
     suspend fun redownloadCurtainData(curtain: CurtainEntity): String {
         _isDownloading.value = true
         _downloadProgress.value = 0
+        _downloadSpeed.value = 0.0
         _error.value = null
 
         try {
@@ -201,8 +208,9 @@ class CurtainViewModel @Inject constructor(
             val result = curtainRepository.downloadCurtainData(
                 linkId = curtain.linkId,
                 hostname = curtain.sourceHostname,
-                progressCallback = { progress ->
+                progressCallback = { progress, speed ->
                     _downloadProgress.value = progress
+                    _downloadSpeed.value = speed
                 },
                 forceDownload = true // Force download even if data exists
             )
@@ -211,6 +219,7 @@ class CurtainViewModel @Inject constructor(
             return result
         } catch (e: Exception) {
             _isDownloading.value = false
+            _downloadSpeed.value = 0.0
             _error.value = e.message
             throw e
         }
@@ -242,6 +251,16 @@ class CurtainViewModel @Inject constructor(
             _error.value = "Error deserializing data: ${e.message}"
             return false
         }
+    }
+
+    /**
+     * Cancels the current download operation
+     */
+    fun cancelDownload() {
+        curtainRepository.cancelDownload()
+        _isDownloading.value = false
+        _downloadProgress.value = 0
+        _downloadSpeed.value = 0.0
     }
     
     /**

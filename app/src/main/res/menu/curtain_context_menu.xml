@@ -7,6 +7,11 @@
         android:icon="@drawable/ic_favorite_border" />
     
     <item
+        android:id="@+id/action_download_resync"
+        android:title="Download"
+        android:icon="@drawable/ic_download" />
+    
+    <item
         android:id="@+id/action_edit_description"
         android:title="Edit Description"
         android:icon="@drawable/ic_edit" />

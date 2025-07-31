@@ -13,13 +13,24 @@ import info.proteo.curtain.UniprotData
 import info.proteo.curtain.UniprotService
 import info.proteo.curtain.data.local.database.entities.CurtainEntity
 import info.proteo.curtain.data.services.SearchService
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.InputStreamReader
 import javax.inject.Inject
+
+/**
+ * Data class for annotation commands (matching Angular frontend pattern)
+ */
+data class AnnotationCommand(
+    val primaryIds: List<String>,
+    val remove: Boolean = false
+)
 
 /**
  * ViewModel to handle interaction with CurtainDetailsFragment
@@ -57,6 +68,10 @@ class CurtainDetailsViewModel @Inject constructor(
 
     private val _isDataLoaded = MutableStateFlow(false)
     val isDataLoaded: StateFlow<Boolean> = _isDataLoaded.asStateFlow()
+
+    // Annotation service for reactive communication (matching Angular frontend pattern)
+    private val _annotationService = MutableSharedFlow<AnnotationCommand>(extraBufferCapacity = 1)
+    val annotationService: SharedFlow<AnnotationCommand> = _annotationService.asSharedFlow()
 
     var curtainDataService: CurtainDataService
     var uniprotService: UniprotService
@@ -155,6 +170,8 @@ class CurtainDetailsViewModel @Inject constructor(
 
     fun updateCurtainSettings(settings: CurtainSettings) {
         _curtainSettings.value = settings
+        // Also update the service's curtainSettings so settings variants can capture it
+        curtainDataService.curtainSettings = settings
     }
     
     /**
@@ -205,5 +222,30 @@ class CurtainDetailsViewModel @Inject constructor(
                 Log.e("CurtainDetailsViewModel", "Error refreshing after search update", e)
             }
         }
+    }
+    
+    /**
+     * Send annotation command to subscribers (matching Angular frontend pattern)
+     */
+    fun sendAnnotationCommand(primaryIds: List<String>, remove: Boolean = false) {
+        android.util.Log.d("CurtainDetailsViewModel", "sendAnnotationCommand: primaryIds=$primaryIds, remove=$remove")
+        viewModelScope.launch {
+            _annotationService.emit(AnnotationCommand(primaryIds, remove))
+            android.util.Log.d("CurtainDetailsViewModel", "Annotation command emitted successfully")
+        }
+    }
+    
+    /**
+     * Add annotations for specific primary IDs
+     */
+    fun addAnnotations(primaryIds: List<String>) {
+        sendAnnotationCommand(primaryIds, remove = false)
+    }
+    
+    /**
+     * Remove annotations for specific primary IDs
+     */
+    fun removeAnnotations(primaryIds: List<String>) {
+        sendAnnotationCommand(primaryIds, remove = true)
     }
 }

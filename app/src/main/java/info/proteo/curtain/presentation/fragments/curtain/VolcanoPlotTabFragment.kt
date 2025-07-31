@@ -19,9 +19,14 @@ import androidx.lifecycle.repeatOnLifecycle
 import info.proteo.curtain.AppData
 import info.proteo.curtain.CurtainSettings
 import info.proteo.curtain.VolcanoAxis
+import info.proteo.curtain.presentation.viewmodels.AnnotationCommand
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import info.proteo.curtain.databinding.FragmentVolcanoPlotTabBinding
 import info.proteo.curtain.utils.EdgeToEdgeHelper
+import info.proteo.curtain.data.models.VolcanoPointDetails
+import info.proteo.curtain.data.models.VolcanoPointSelection
+import info.proteo.curtain.presentation.dialogs.VolcanoPointDetailsDialog
+import android.webkit.JavascriptInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +45,9 @@ class VolcanoPlotTabFragment : Fragment() {
     
     // Variable to track if a volcano plot refresh is in progress
     private var isRefreshing = false
+    
+    // Store the color map for trace groups to use in point selection dialogs
+    private var currentColorMap: Map<String, String> = emptyMap()
 
 
     override fun onCreateView(
@@ -54,6 +62,7 @@ class VolcanoPlotTabFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupWebView()
+        setupEditToggle()
         
         // Primary observer for curtain data changes
         viewLifecycleOwner.lifecycleScope.launch {
@@ -61,6 +70,8 @@ class VolcanoPlotTabFragment : Fragment() {
                 viewModel.curtainData.collect { curtainData ->
                     if (curtainData != null) {
                         loadVolcanoPlotDefer()
+                        // Update FAB visibility when data changes
+                        updateFabVisibility()
                     }
                 }
             }
@@ -82,18 +93,39 @@ class VolcanoPlotTabFragment : Fragment() {
                 }
             }
         }
+        
+        // Note: Annotations are now handled via direct settings modification
+        // The volcano plot will automatically refresh when switching tabs via onResume()
     }
+    
+    private var lastSettingsHash: Int = 0
     
     override fun onResume() {
         super.onResume()
-        // Force refresh when returning to this tab to ensure search changes are reflected
+        // Force refresh when returning to this tab to ensure search changes and annotations are reflected
         val curtainData = viewModel.curtainData.value
+        val curtainSettings = viewModel.curtainSettings.value
+        
         if (curtainData != null) {
+            // Check if settings have changed (particularly annotations)
+            val currentSettingsHash = curtainSettings?.textAnnotation?.hashCode() ?: 0
+            val shouldRefresh = currentSettingsHash != lastSettingsHash
+            
+            if (shouldRefresh) {
+                android.util.Log.d("VolcanoPlot", "Settings changed, refreshing plot (annotations may have been added/removed)")
+                lastSettingsHash = currentSettingsHash
+            }
+            
             // Ensure differential data is processed first
             lifecycleScope.launch {
                 viewModel.curtainDataService.processDataAfterImport()
                 viewModel.searchService.saveSearchListsToCurtainData(curtainData)
                 loadVolcanoPlotDefer()
+                
+                // Update FAB visibility after plot is loaded
+                withContext(Dispatchers.Main) {
+                    updateFabVisibility()
+                }
             }
         }
     }
@@ -105,6 +137,9 @@ class VolcanoPlotTabFragment : Fragment() {
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
             settings.allowContentAccess = true
+
+            // Add JavaScript interface for point selection
+            addJavascriptInterface(VolcanoPlotJavaScriptInterface(), "Android")
 
             // Request disallow intercept to prevent parent from handling touch events
             setOnTouchListener { v, event ->
@@ -146,8 +181,55 @@ class VolcanoPlotTabFragment : Fragment() {
             }
         }
     }
-
-
+    
+    private var isEditModeEnabled = false
+    
+    private fun setupEditToggle() {
+        binding.fabEditToggle.setOnClickListener {
+            isEditModeEnabled = !isEditModeEnabled
+            Log.d("VolcanoPlot", "FAB clicked, edit mode now: $isEditModeEnabled")
+            toggleEditMode(isEditModeEnabled)
+            updateFabAppearance()
+        }
+    }
+    
+    private fun updateFabAppearance() {
+        // Update FAB icon based on mode
+        val iconRes = if (isEditModeEnabled) {
+            android.R.drawable.ic_menu_close_clear_cancel
+        } else {
+            info.proteo.curtain.R.drawable.ic_edit_24
+        }
+        binding.fabEditToggle.setImageResource(iconRes)
+        
+        // Update FAB color
+        val colorTint = if (isEditModeEnabled) {
+            androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.holo_red_light)
+        } else {
+            // Use theme's primary color
+            val typedValue = android.util.TypedValue()
+            requireContext().theme.resolveAttribute(com.google.android.material.R.attr.colorPrimary, typedValue, true)
+            typedValue.data.toInt()
+        }
+        binding.fabEditToggle.backgroundTintList = 
+            android.content.res.ColorStateList.valueOf(colorTint)
+    }
+    
+    private fun updateFabVisibility() {
+        val curtainSettings = viewModel.curtainSettings.value
+        val hasAnnotations = curtainSettings?.textAnnotation?.isNotEmpty() == true
+        
+        if (hasAnnotations) {
+            binding.fabEditToggle.visibility = View.VISIBLE
+        } else {
+            binding.fabEditToggle.visibility = View.GONE
+            // If FAB is hidden, make sure edit mode is disabled
+            if (isEditModeEnabled) {
+                isEditModeEnabled = false
+                toggleEditMode(false)
+            }
+        }
+    }
 
     private suspend fun processVolcanoData(
         curtainData: AppData,
@@ -742,6 +824,9 @@ class VolcanoPlotTabFragment : Fragment() {
 
                 // Switch back to main thread to update UI
                 withContext(Dispatchers.Main) {
+                    // Store color map for use in point selection dialogs
+                    currentColorMap = result.colorMap
+                    
                     val updatedSettings = curtainSettings.copy(
                         colorMap = result.colorMap,
                         volcanoAxis = result.updatedVolcanoAxis
@@ -862,6 +947,9 @@ class VolcanoPlotTabFragment : Fragment() {
                 }
                 val fontFamily = JSONObject.quote(font?.get("family")?.toString() ?: "Arial")
 
+                // Get annotationID for dragging support (it's nested under "data")  
+                val annotationId = JSONObject.quote(annotationDetails["annotationID"]?.toString() ?: title)
+
                 jsCode.append("""
                     annotations.push({
                         text: $text,
@@ -880,7 +968,8 @@ class VolcanoPlotTabFragment : Fragment() {
                             color: $fontColor,
                             size: $fontSize,
                             family: $fontFamily
-                        }
+                        },
+                        annotationID: $annotationId
                     });
                 """.trimIndent())
             }
@@ -907,11 +996,26 @@ class VolcanoPlotTabFragment : Fragment() {
             #plot {
                 width: 100%;
                 height: 100vh;
+                position: relative;
+            }
+            #touchOverlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 1000;
+                pointer-events: none;
+                background: transparent;
+            }
+            #touchOverlay.edit-mode {
+                pointer-events: auto;
             }
         </style>
     </head>
     <body>
         <div id="plot"></div>
+        <div id="touchOverlay"></div>
         <script>
             const data = JSON.parse('${jsonData}');
 
@@ -945,10 +1049,49 @@ class VolcanoPlotTabFragment : Fragment() {
                 }
             });
 
-            // Create a trace for each selection group
+            // Create traces exactly matching Angular frontend creation order
+            // Angular creates: user selections first, then background/significance groups
             const traces = [];
+            
+            // First: Add user selection traces (matching Angular creation order)
             for (const groupName in selectionGroups) {
                 const group = selectionGroups[groupName];
+                
+                // Skip background/significance groups in this pass
+                if (groupName === "Background" || 
+                    groupName === "Other" || 
+                    (groupName.includes("(") && (groupName.includes("P-value") || groupName.includes("FC")))) {
+                    continue;
+                }
+                
+                // User selection operations (from search, manual selection, etc.)
+                traces.push({
+                    x: group.points.map(point => point.x),
+                    y: group.points.map(point => point.y),
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        color: group.color,
+                        size: ${curtainSettings.scatterPlotMarkerSize},
+                        opacity: 0.7
+                    },
+                    text: group.points.map(point => point.gene),
+                    hoverinfo: 'text+x+y',
+                    name: group.name
+                });
+            }
+            
+            // Second: Add background and significance group traces
+            for (const groupName in selectionGroups) {
+                const group = selectionGroups[groupName];
+                
+                // Only process background/significance groups in this pass
+                if (!(groupName === "Background" || 
+                      groupName === "Other" || 
+                      (groupName.includes("(") && (groupName.includes("P-value") || groupName.includes("FC"))))) {
+                    continue;
+                }
+                
                 traces.push({
                     x: group.points.map(point => point.x),
                     y: group.points.map(point => point.y),
@@ -1092,18 +1235,400 @@ class VolcanoPlotTabFragment : Fragment() {
             // Add cutoff shapes to the layout
             layout.shapes = cutOff;
 
+            // CRITICAL: Reverse traces array to match Angular frontend (volcano-plot.component.ts line 484)
+            // This replicates the exact same ordering: user selections on top, background behind
+            traces.reverse();
+
             // Adjust background color and opacity
             const backgroundTrace = traces.find(trace => trace.name === 'Background');
             if (backgroundTrace && ${curtainSettings.backGroundColorGrey}) {
                 backgroundTrace.marker.color = '#a4a2a2';
                 backgroundTrace.marker.opacity = 0.3;
             }
-
-            // Reverse traces array to match Angular implementation (selections appear on top)
-            traces.reverse();
             
-            // Create the plot with all traces
-            Plotly.newPlot('plot', traces, layout, {responsive: true});
+            // Create the plot with all traces (now in exact Angular frontend order)
+            Plotly.newPlot('plot', traces, layout, {
+                responsive: true,
+                displayModeBar: false,
+                editable: false
+            });
+            
+            // Add event listener for annotation drag/relayout events
+            document.getElementById('plot').on('plotly_relayout', function(eventData) {
+                console.log('plotly_relayout event:', Object.keys(eventData));
+                
+                // Check if any annotations were moved
+                for (const key in eventData) {
+                    if (key.startsWith('annotations[') && key.includes('].x')) {
+                        try {
+                            const annotationIndex = key.match(/annotations\\[(\\d+)\\]/)[1];
+                            const xKey = 'annotations[' + annotationIndex + '].x';
+                            const yKey = 'annotations[' + annotationIndex + '].y';
+                            
+                            if (eventData[xKey] !== undefined && eventData[yKey] !== undefined) {
+                                const newX = eventData[xKey];
+                                const newY = eventData[yKey];
+                                const annotationId = layout.annotations[annotationIndex].annotationID;
+                                
+                                console.log('Annotation moved:', annotationId, 'to:', newX, newY);
+                                
+                                // Call Android method to update annotation position
+                                Android.updateAnnotationPosition(annotationId, newX, newY);
+                            }
+                        } catch (e) {
+                            console.log('Error processing annotation move:', e);
+                        }
+                    }
+                }
+            });
+            
+            // Track edit mode state
+            let isEditMode = false;
+            
+            // Touch overlay drag handling
+            let isDragging = false;
+            let draggedAnnotation = null;
+            let dragStartX = 0;
+            let dragStartY = 0;
+            let dragStartAnnotationX = 0;
+            let dragStartAnnotationY = 0;
+            let finalTextX = 0;
+            let finalTextY = 0;
+            
+            // Function to convert screen coordinates to plot coordinates
+            function screenToPlotCoords(screenX, screenY) {
+                const plotDiv = document.getElementById('plot');
+                if (!plotDiv) {
+                    console.error('Plot div not found');
+                    return { x: 0, y: 0 };
+                }
+                
+                const plotBounds = plotDiv.getBoundingClientRect();
+                
+                // Try to find the actual plot area - check multiple possible selectors
+                let plotInnerBounds = null;
+                const possibleSelectors = [
+                    '.plot-container .plotly',
+                    '.plotly',
+                    '.main-svg',
+                    '.svg-container'
+                ];
+                
+                for (const selector of possibleSelectors) {
+                    const element = plotDiv.querySelector(selector);
+                    if (element) {
+                        plotInnerBounds = element.getBoundingClientRect();
+                        break;
+                    }
+                }
+                
+                // Fallback to using the main plot div bounds
+                if (!plotInnerBounds) {
+                    plotInnerBounds = plotBounds;
+                }
+                
+                // Calculate relative position within the plot area
+                const relativeX = screenX - plotInnerBounds.left;
+                const relativeY = screenY - plotInnerBounds.top;
+                
+                // Convert to plot coordinates using Plotly's coordinate system
+                if (plotDiv._fullLayout) {
+                    const xaxis = plotDiv._fullLayout.xaxis;
+                    const yaxis = plotDiv._fullLayout.yaxis;
+                    
+                    if (xaxis && yaxis) {
+                        // Use Plotly's coordinate conversion if available
+                        const plotWidth = plotInnerBounds.width;
+                        const plotHeight = plotInnerBounds.height;
+                        
+                        // Convert from pixel coordinates to data coordinates
+                        const xRange = xaxis.range || [-2, 2];
+                        const yRange = yaxis.range || [0, 10];
+                        
+                        const plotX = xRange[0] + (relativeX / plotWidth) * (xRange[1] - xRange[0]);
+                        const plotY = yRange[0] + ((plotHeight - relativeY) / plotHeight) * (yRange[1] - yRange[0]);
+                        
+                        return { x: plotX, y: plotY };
+                    }
+                }
+                
+                // Fallback: return normalized coordinates
+                return { 
+                    x: relativeX / plotInnerBounds.width, 
+                    y: relativeY / plotInnerBounds.height 
+                };
+            }
+            
+            // Function to find annotation near screen coordinates
+            function findAnnotationNear(screenX, screenY, threshold = 50) {
+                const plotDiv = document.getElementById('plot');
+                if (!plotDiv._fullLayout || !plotDiv._fullLayout.annotations) {
+                    console.log('No plot layout or annotations found');
+                    return null;
+                }
+                
+                const annotations = plotDiv._fullLayout.annotations;
+                console.log('Checking', annotations.length, 'annotations');
+                
+                for (let i = 0; i < annotations.length; i++) {
+                    const ann = annotations[i];
+                    console.log('Annotation', i, ':', ann.annotationID, 'at plot coords:', ann.x, ann.y);
+                    console.log('Full annotation object:', ann);
+                    
+                    // Don't skip annotations without annotationID - we'll match by text instead
+                    
+                    // Convert annotation plot coordinates to screen coordinates
+                    const xaxis = plotDiv._fullLayout.xaxis;
+                    const yaxis = plotDiv._fullLayout.yaxis;
+                    
+                    console.log('Axis info - xaxis:', xaxis ? 'exists' : 'missing', 'yaxis:', yaxis ? 'exists' : 'missing');
+                    
+                    // Use Plotly's coordinate conversion methods
+                    let screenAnnX, screenAnnY;
+                    try {
+                        screenAnnX = xaxis._offset + xaxis._length * (ann.x - xaxis.range[0]) / (xaxis.range[1] - xaxis.range[0]);
+                        screenAnnY = yaxis._offset + yaxis._length * (1 - (ann.y - yaxis.range[0]) / (yaxis.range[1] - yaxis.range[0]));
+                    } catch (e) {
+                        console.log('Coordinate conversion error:', e);
+                        screenAnnX = ann.x;
+                        screenAnnY = ann.y;
+                    }
+                    
+                    console.log('Converted to screen coords:', screenAnnX, screenAnnY);
+                    console.log('Touch at:', screenX, screenY);
+                    
+                    // Calculate distance
+                    const distance = Math.sqrt(
+                        Math.pow(screenX - screenAnnX, 2) + 
+                        Math.pow(screenY - screenAnnY, 2)
+                    );
+                    
+                    console.log('Distance:', distance, 'threshold:', threshold);
+                    
+                    if (distance <= threshold) {
+                        console.log('Found matching annotation!');
+                        return { annotation: ann, index: i };
+                    }
+                }
+                
+                console.log('No annotation found near touch point');
+                return null;
+            }
+            
+            // Function to toggle edit mode
+            window.toggleEditMode = function(enable) {
+                isEditMode = enable;
+                console.log('Edit mode:', isEditMode ? 'enabled' : 'disabled');
+                
+                // Enable/disable touch overlay
+                const overlay = document.getElementById('touchOverlay');
+                if (isEditMode) {
+                    overlay.classList.add('edit-mode');
+                    setupTouchHandlers();
+                } else {
+                    overlay.classList.remove('edit-mode');
+                    removeTouchHandlers();
+                }
+                
+                // Update layout to disable/enable interactions
+                const updatedLayout = Object.assign({}, layout);
+                console.log('Number of annotations:', updatedLayout.annotations ? updatedLayout.annotations.length : 0);
+                if (updatedLayout.annotations && updatedLayout.annotations.length > 0) {
+                    console.log('Annotation IDs:', updatedLayout.annotations.map(ann => ann.annotationID));
+                }
+                if (isEditMode) {
+                    // Disable plot interactions to prevent interference with annotation dragging
+                    updatedLayout.dragmode = false;
+                    updatedLayout.hovermode = false;
+                } else {
+                    // Restore normal interactions
+                    updatedLayout.dragmode = 'zoom';
+                    updatedLayout.hovermode = 'closest';
+                }
+                
+                // Update plot configuration to enable/disable editing
+                const config = {
+                    responsive: true,
+                    displayModeBar: false, // Always hide the mode bar
+                    scrollZoom: !isEditMode, // Disable scroll zoom in edit mode
+                    doubleClick: isEditMode ? false : 'reset', // Disable double-click zoom in edit mode
+                    editable: false, // Disable Plotly's built-in editing
+                };
+                
+                // Update plot with new config and layout to enable/disable editing
+                Plotly.react('plot', traces, updatedLayout, config);
+            };
+            
+            // Touch event handlers
+            function setupTouchHandlers() {
+                const overlay = document.getElementById('touchOverlay');
+                
+                overlay.addEventListener('touchstart', handleTouchStart, { passive: false });
+                overlay.addEventListener('touchmove', handleTouchMove, { passive: false });
+                overlay.addEventListener('touchend', handleTouchEnd, { passive: false });
+            }
+            
+            function removeTouchHandlers() {
+                const overlay = document.getElementById('touchOverlay');
+                
+                overlay.removeEventListener('touchstart', handleTouchStart);
+                overlay.removeEventListener('touchmove', handleTouchMove);
+                overlay.removeEventListener('touchend', handleTouchEnd);
+            }
+            
+            function handleTouchStart(event) {
+                event.preventDefault();
+                
+                const touch = event.touches[0];
+                const rect = event.target.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                console.log('Touch start at:', x, y);
+                
+                // Find annotation near touch point
+                const found = findAnnotationNear(x, y);
+                if (found) {
+                    console.log('Found annotation:', found.annotation.annotationID);
+                    isDragging = true;
+                    draggedAnnotation = found;
+                    dragStartX = x;
+                    dragStartY = y;
+                    dragStartAnnotationX = found.annotation.x;
+                    dragStartAnnotationY = found.annotation.y;
+                }
+            }
+            
+            function handleTouchMove(event) {
+                if (!isDragging || !draggedAnnotation) return;
+                
+                event.preventDefault();
+                
+                const touch = event.touches[0];
+                
+                // Use the overlay element instead of event.target
+                const overlay = document.getElementById('touchOverlay');
+                if (!overlay) return;
+                
+                const rect = overlay.getBoundingClientRect();
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                // Calculate drag delta
+                const deltaX = x - dragStartX;
+                const deltaY = y - dragStartY;
+                
+                console.log('Touch move - current:', x, y, 'start:', dragStartX, dragStartY, 'delta:', deltaX, deltaY);
+                
+                // Convert screen delta to plot coordinates delta
+                const plotCoords = screenToPlotCoords(dragStartX + deltaX, dragStartY + deltaY);
+                const startPlotCoords = screenToPlotCoords(dragStartX, dragStartY);
+                
+                const newX = dragStartAnnotationX + (plotCoords.x - startPlotCoords.x);
+                const newY = dragStartAnnotationY + (plotCoords.y - startPlotCoords.y);
+                
+                // Store the final text position for handleTouchEnd
+                finalTextX = newX;
+                finalTextY = newY;
+                
+                console.log('Moving annotation from:', dragStartAnnotationX, dragStartAnnotationY, 'to:', newX, newY);
+                
+                // Update annotation text position in real-time by changing ax, ay offset
+                // Keep arrow tip (x, y) unchanged, only move text via offset
+                const currentAnnotation = layout.annotations[draggedAnnotation.index];
+                if (currentAnnotation) {
+                    const arrowTipX = currentAnnotation.x;  // Original data point position
+                    const arrowTipY = currentAnnotation.y;  // Original data point position
+                    
+                    // Calculate arrow offset for real-time feedback
+                    const axOffset = (newX - arrowTipX) * 50;  // Convert to pixel offset
+                    const ayOffset = (newY - arrowTipY) * -50; // Negative for Plotly's inverted y
+                    
+                    // Update only the arrow offset (ax, ay) for real-time visual feedback
+                    const update = {};
+                    update['annotations[' + draggedAnnotation.index + '].ax'] = axOffset;
+                    update['annotations[' + draggedAnnotation.index + '].ay'] = ayOffset;
+                    
+                    Plotly.relayout('plot', update);
+                }
+            }
+            
+            function handleTouchEnd(event) {
+                if (!isDragging || !draggedAnnotation) return;
+                
+                event.preventDefault();
+                
+                console.log('Touch end - final position:', finalTextX, finalTextY);
+                
+                // Notify Android of final text position (not arrow tip position)
+                // Use annotationID if available, otherwise use annotation text as identifier (strip HTML tags)
+                let annotationId = draggedAnnotation.annotation.annotationID;
+                if (!annotationId && draggedAnnotation.annotation.text) {
+                    // Strip HTML tags from text to match textAnnotation key
+                    annotationId = draggedAnnotation.annotation.text.replace(/<[^>]*>/g, '');
+                }
+                if (!annotationId) {
+                    annotationId = 'annotation_' + draggedAnnotation.index;
+                }
+                
+                Android.updateAnnotationPosition(
+                    annotationId,
+                    finalTextX,
+                    finalTextY
+                );
+                
+                // Reset drag state
+                isDragging = false;
+                draggedAnnotation = null;
+            }
+            
+            // Function to enable annotation editing
+            window.enableAnnotationEditing = function() {
+                window.toggleEditMode(true);
+            };
+            
+            // Function to disable annotation editing
+            window.disableAnnotationEditing = function() {
+                window.toggleEditMode(false);
+            };
+            
+            // Add click event handler for point selection (only when not in edit mode)
+            document.getElementById('plot').on('plotly_click', function(eventData) {
+                if (isEditMode) {
+                    // In edit mode, ignore point clicks
+                    return;
+                }
+                
+                if (eventData.points && eventData.points.length > 0) {
+                    const point = eventData.points[0];
+                    const traceGroup = point.fullData.name; // This is the trace name/group
+                    const pointIndex = point.pointIndex;
+                    
+                    // Find the corresponding data point
+                    const dataPoint = data.find(d => 
+                        d.x === point.x && 
+                        d.y === point.y
+                    );
+                    
+                    if (dataPoint && typeof Android !== 'undefined') {
+                        try {
+                            const pointJson = JSON.stringify({
+                                id: dataPoint.id,
+                                gene: dataPoint.gene,
+                                x: dataPoint.x,
+                                y: dataPoint.y,
+                                comparison: dataPoint.comparison || '',
+                                traceGroup: traceGroup || ''
+                            });
+                            
+                            // Call Android interface with point data and click coordinates
+                            Android.onPointClicked(pointJson, point.x, point.y);
+                        } catch (e) {
+                            console.error('Error calling Android interface:', e);
+                        }
+                    }
+                }
+            });
         </script>
     </body>
     </html>
@@ -1116,6 +1641,512 @@ class VolcanoPlotTabFragment : Fragment() {
             plotLoadingText.visibility = if (isLoading) View.VISIBLE else View.GONE
             webView.visibility = if (isLoading) View.GONE else View.VISIBLE
         }
+    }
+
+    /**
+     * Handle annotation commands from the annotation service (matching Angular frontend pattern)
+     */
+    // DEPRECATED: Annotation handling now done via direct settings modification
+    // private fun handleAnnotationCommand(command: AnnotationCommand) { ... }
+    
+    /**
+     * Create annotations for data points using primary IDs (matching Angular frontend pattern)
+     */
+    private fun annotateDataPoints(primaryIds: List<String>) {
+        val curtainData = viewModel.curtainData.value ?: return
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        // Get differential data (equivalent to Angular's currentDF)
+        val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+        if (processedData == null) {
+            Log.e("VolcanoPlot", "No processed differential data available for annotation")
+            return
+        }
+        
+        // Get differential form settings (equivalent to Angular's differentialForm)
+        val diffForm = curtainData.differentialForm
+        val fcColumn = diffForm.foldChange
+        val sigColumn = diffForm.significant
+        val idColumn = diffForm.primaryIDs
+        val geneColumn = diffForm.geneNames
+        
+        // Filter data by primary IDs (equivalent to Angular's DataFrame.where())
+        val annotatedData = processedData.filter { row ->
+            val primaryId = row[idColumn]?.toString()
+            primaryId != null && primaryIds.contains(primaryId)
+        }
+        
+        if (annotatedData.isEmpty()) {
+            Log.w("VolcanoPlot", "No data found for primary IDs: $primaryIds")
+            return
+        }
+        
+        // Create annotations for each filtered data point
+        val existingAnnotations = curtainSettings.textAnnotation.toMutableMap()
+        val newAnnotations = mutableListOf<Map<String, Any>>()
+        
+        for (dataPoint in annotatedData) {
+            val primaryId = dataPoint[idColumn]?.toString() ?: continue
+            val gene = if (geneColumn.isNotEmpty()) dataPoint[geneColumn]?.toString() ?: primaryId else primaryId
+            
+            // Create annotation title (same logic as Angular frontend)
+            val title = if (gene.isNotEmpty() && gene != primaryId) {
+                "$gene($primaryId)"
+            } else {
+                primaryId
+            }
+            
+            // Skip if annotation already exists
+            if (existingAnnotations.containsKey(title)) {
+                Log.d("VolcanoPlot", "Annotation already exists for: $title")
+                continue
+            }
+            
+            // Get coordinates from data
+            val x = when (val fc = dataPoint[fcColumn]) {
+                is Number -> fc.toDouble()
+                is String -> fc.toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
+            
+            val y = when (val sig = dataPoint[sigColumn]) {
+                is Number -> sig.toDouble()
+                is String -> sig.toDoubleOrNull() ?: 0.0
+                else -> 0.0
+            }
+            
+            // Create annotation data structure (matching Angular frontend exactly)
+            val annotationData = mapOf(
+                "primary_id" to primaryId,
+                "title" to title,
+                "data" to mapOf(
+                    "xref" to "x",
+                    "yref" to "y",
+                    "x" to x,
+                    "y" to y,
+                    "text" to "<b>$title</b>",
+                    "showarrow" to true,
+                    "arrowhead" to 1,
+                    "arrowsize" to 1,
+                    "arrowwidth" to 1,
+                    "ax" to -20,
+                    "ay" to -20,
+                    "font" to mapOf(
+                        "size" to 15,
+                        "color" to "#000000",
+                        "family" to "Arial, sans-serif"
+                    ),
+                    "showannotation" to true,
+                    "annotationID" to title
+                )
+            )
+            
+            existingAnnotations[title] = annotationData
+            newAnnotations.add(annotationData)
+            
+            Log.d("VolcanoPlot", "Created annotation: $title at ($x, $y)")
+        }
+        
+        if (newAnnotations.isNotEmpty()) {
+            // Update settings (matching Angular frontend pattern)
+            val updatedSettings = curtainSettings.copy(textAnnotation = existingAnnotations)
+            viewModel.updateCurtainSettings(updatedSettings)
+            
+            // Refresh plot to show new annotations
+            Log.d("VolcanoPlot", "Reloading plot to show new annotations")
+            loadVolcanoPlotDefer()
+            
+            Log.d("VolcanoPlot", "Added ${newAnnotations.size} annotations")
+        }
+    }
+    
+    /**
+     * Remove annotations for specific primary IDs (matching Angular frontend pattern)
+     */
+    private fun removeAnnotatedDataPoints(primaryIds: List<String>) {
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        val existingAnnotations = curtainSettings.textAnnotation.toMutableMap()
+        var removedCount = 0
+        
+        // Find and remove annotations by primary ID or title
+        val annotationsToRemove = mutableListOf<String>()
+        
+        for ((annotationKey, annotationValue) in existingAnnotations) {
+            @Suppress("UNCHECKED_CAST")
+            val annotation = annotationValue as? Map<String, Any>
+            val annotationPrimaryId = annotation?.get("primary_id")?.toString()
+            
+            // Remove if primary ID matches or if annotation key contains the primary ID
+            if (annotationPrimaryId != null && primaryIds.contains(annotationPrimaryId)) {
+                annotationsToRemove.add(annotationKey)
+            } else {
+                // Also check if any primary ID is contained in the annotation key
+                for (primaryId in primaryIds) {
+                    if (annotationKey.contains(primaryId)) {
+                        annotationsToRemove.add(annotationKey)
+                        break
+                    }
+                }
+            }
+        }
+        
+        // Remove found annotations
+        for (key in annotationsToRemove) {
+            existingAnnotations.remove(key)
+            removedCount++
+        }
+        
+        if (removedCount > 0) {
+            // Update settings
+            val updatedSettings = curtainSettings.copy(textAnnotation = existingAnnotations)
+            viewModel.updateCurtainSettings(updatedSettings)
+            
+            // Refresh plot to hide removed annotations
+            Log.d("VolcanoPlot", "Reloading plot to hide removed annotations")
+            loadVolcanoPlotDefer()
+            
+            Log.d("VolcanoPlot", "Removed $removedCount annotations")
+        }
+    }
+    
+    /**
+     * Refresh plot annotations without full reload (matching Angular frontend pattern)
+     */
+    private fun refreshPlotWithAnnotations() {
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        val annotationsJS = generateTextAnnotationsJS(curtainSettings.textAnnotation)
+        
+        val jsCode = """
+            (function() {
+                const annotations = [];
+                $annotationsJS
+                
+                const update = {
+                    'annotations': annotations
+                };
+                
+                if (typeof Plotly !== 'undefined' && document.getElementById('plot')) {
+                    Plotly.relayout('plot', update);
+                }
+            })();
+        """.trimIndent()
+        
+        binding.webView.evaluateJavascript(jsCode) { result ->
+            Log.d("VolcanoPlot", "Updated annotations via JavaScript")
+        }
+    }
+
+    /**
+     * JavaScript interface for handling volcano plot interactions
+     */
+    inner class VolcanoPlotJavaScriptInterface {
+        @JavascriptInterface
+        fun onPointClicked(pointDataJson: String, clickX: Double, clickY: Double) {
+            Log.d("VolcanoPlot", "Point clicked: $pointDataJson at ($clickX, $clickY)")
+            
+            lifecycleScope.launch {
+                try {
+                    val pointData = JSONObject(pointDataJson)
+                    val proteinId = pointData.getString("id")
+                    val geneName = pointData.getString("gene")
+                    val foldChange = pointData.getDouble("x")
+                    val significance = pointData.getDouble("y")
+                    val comparison = pointData.optString("comparison", "")
+                    val traceGroup = pointData.optString("traceGroup", "")
+                    
+                    val selectedPoint = VolcanoPointDetails(
+                        proteinId = proteinId,
+                        geneName = geneName,
+                        foldChange = foldChange,
+                        significance = significance,
+                        comparison = comparison,
+                        traceGroup = traceGroup.takeIf { it.isNotEmpty() },
+                        traceGroupColor = getTraceGroupColor(traceGroup, currentColorMap)
+                    )
+                    
+                    // Find nearby points
+                    val nearbyPoints = findNearbyPoints(selectedPoint, clickX, clickY)
+                    
+                    val pointSelection = VolcanoPointSelection(
+                        selectedPoint = selectedPoint,
+                        nearbyPoints = nearbyPoints,
+                        clickX = clickX,
+                        clickY = clickY
+                    )
+                    
+                    // Show dialog on main thread
+                    withContext(Dispatchers.Main) {
+                        if (isAdded && !isDetached) {
+                            val dialog = VolcanoPointDetailsDialog.newInstance(pointSelection)
+                            dialog.show(parentFragmentManager, "VolcanoPointDetailsDialog")
+                        }
+                    }
+                    
+                } catch (e: Exception) {
+                    Log.e("VolcanoPlot", "Error processing point click", e)
+                }
+            }
+        }
+        
+        @JavascriptInterface
+        fun updateAnnotationPosition(annotationId: String, newX: Double, newY: Double) {
+            Log.d("VolcanoPlot", "JavaScript called updateAnnotationPosition: $annotationId to ($newX, $newY)")
+            
+            lifecycleScope.launch {
+                try {
+                    val curtainSettings = viewModel.curtainSettings.value ?: return@launch
+                    val existingAnnotations = curtainSettings.textAnnotation.toMutableMap()
+                    
+                    // Find annotation by annotationID and update position
+                    val annotationToUpdate = existingAnnotations[annotationId]
+                    
+                    if (annotationToUpdate != null) {
+                        val annotationMap = annotationToUpdate as? Map<String, Any>
+                        val annotationDataInner = annotationMap?.get("data") as? Map<String, Any>
+                        
+                        if (annotationDataInner != null) {
+                            val updatedDataInner = annotationDataInner.toMutableMap()
+                            
+                            // Get current arrow tip position (keep it unchanged)
+                            val arrowTipX = annotationDataInner["x"] as? Double ?: 0.0
+                            val arrowTipY = annotationDataInner["y"] as? Double ?: 0.0
+                            
+                            // Calculate arrow offset (text position relative to arrow tip)
+                            val axOffset = (newX - arrowTipX) * 50  // Convert to pixel offset approximation
+                            val ayOffset = (newY - arrowTipY) * -50 // Negative because Plotly's ay is inverted
+                            
+                            // Update arrow offset instead of arrow tip position
+                            updatedDataInner["ax"] = axOffset
+                            updatedDataInner["ay"] = ayOffset
+                            
+                            // Keep x, y unchanged (arrow tip stays at data point)
+                            
+                            val updatedAnnotationData = (annotationMap as Map<String, Any>).toMutableMap()
+                            updatedAnnotationData["data"] = updatedDataInner
+                            
+                            existingAnnotations[annotationId] = updatedAnnotationData
+                            
+                            // Update settings
+                            val updatedSettings = curtainSettings.copy(textAnnotation = existingAnnotations)
+                            viewModel.updateCurtainSettings(updatedSettings)
+                            
+                            // Update the plot display immediately
+                            updatePlotAnnotationOffset(annotationId, axOffset, ayOffset)
+                            
+                            Log.d("VolcanoPlot", "Updated annotation position for: $annotationId")
+                        }
+                    } else {
+                        Log.w("VolcanoPlot", "Annotation not found for update: $annotationId")
+                    }
+                } catch (e: Exception) {
+                    Log.e("VolcanoPlot", "Error updating annotation position", e)
+                }
+            }
+        }
+    }
+    
+    private fun updatePlotAnnotationOffset(annotationId: String, axOffset: Double, ayOffset: Double) {
+        // Execute JavaScript to update the annotation position in the plot
+        binding.webView.evaluateJavascript("""
+            (function() {
+                try {
+                    const plotDiv = document.getElementById('plot');
+                    if (!plotDiv || !plotDiv.layout || !plotDiv.layout.annotations) {
+                        console.log('Plot or annotations not found');
+                        return;
+                    }
+                    
+                    const annotations = plotDiv.layout.annotations;
+                    let annotationIndex = -1;
+                    
+                    // Find the annotation by annotationID
+                    for (let i = 0; i < annotations.length; i++) {
+                        if (annotations[i].annotationID === '$annotationId') {
+                            annotationIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (annotationIndex >= 0) {
+                        // Update only the arrow offset (ax, ay) to move text while keeping arrow tip fixed
+                        const update = {};
+                        update['annotations[' + annotationIndex + '].ax'] = $axOffset;
+                        update['annotations[' + annotationIndex + '].ay'] = $ayOffset;
+                        
+                        // Apply the update to the plot
+                        Plotly.relayout('plot', update);
+                        console.log('Updated annotation text position for: $annotationId, ax: $axOffset, ay: $ayOffset');
+                    } else {
+                        console.log('Annotation not found in plot: $annotationId');
+                    }
+                } catch (e) {
+                    console.error('Error updating annotation display:', e);
+                }
+            })();
+        """.trimIndent(), null)
+    }
+    
+    /**
+     * Find nearby points within a reasonable distance from the click point
+     * Also determines the trace group for each nearby point
+     */
+    private fun findNearbyPoints(selectedPoint: VolcanoPointDetails, clickX: Double, clickY: Double): List<VolcanoPointDetails> {
+        val curtainData = viewModel.curtainData.value ?: return emptyList()
+        val curtainSettings = viewModel.curtainSettings.value ?: return emptyList()
+        
+        Log.d("VolcanoPlot", "Finding nearby points for ${selectedPoint.proteinId} at click ($clickX, $clickY)")
+        
+        try {
+            // Get differential data
+            val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+                ?: run {
+                    Log.w("VolcanoPlot", "No processedDifferentialData found")
+                    return emptyList()
+                }
+            
+            Log.d("VolcanoPlot", "Found ${processedData.size} data rows to search")
+            
+            // Get column mappings
+            val diffForm = curtainData.differentialForm
+            val fcColumn = diffForm.foldChange
+            val sigColumn = diffForm.significant
+            val idColumn = diffForm.primaryIDs
+            val geneColumn = diffForm.geneNames
+            val comparisonColumn = diffForm.comparison
+            
+            Log.d("VolcanoPlot", "Column mappings: FC=$fcColumn, Sig=$sigColumn, ID=$idColumn")
+            
+            // Define search radius (in plot coordinates) - default cutoff distance
+            val searchRadius = 1.0 // Default cutoff distance
+            
+            val nearbyPoints = mutableListOf<VolcanoPointDetails>()
+            
+            for (row in processedData) {
+                val id = row[idColumn]?.toString() ?: continue
+                
+                // Skip the selected point itself
+                if (id == selectedPoint.proteinId) continue
+                
+                val gene = if (geneColumn.isNotEmpty()) row[geneColumn]?.toString() ?: id else id
+                val comparison = if (comparisonColumn.isNotEmpty()) row[comparisonColumn]?.toString() ?: "" else ""
+                
+                val fcValue = when (val fc = row[fcColumn]) {
+                    is Number -> fc.toDouble()
+                    is String -> fc.toDoubleOrNull() ?: continue
+                    else -> continue
+                }
+                
+                val sigValue = when (val sig = row[sigColumn]) {
+                    is Number -> sig.toDouble()
+                    is String -> sig.toDoubleOrNull() ?: continue
+                    else -> continue
+                }
+                
+                // Calculate distance from click point
+                val dx = fcValue - clickX
+                val dy = sigValue - clickY
+                val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+                
+                // Include if within search radius
+                if (distance <= searchRadius) {
+                    // Determine trace group for this point using the same logic as volcano plot
+                    val traceGroup = determineTraceGroup(id, fcValue, sigValue, comparison, curtainData, curtainSettings)
+                    
+                    val nearbyPoint = VolcanoPointDetails(
+                        proteinId = id,
+                        geneName = gene,
+                        foldChange = fcValue,
+                        significance = sigValue,
+                        comparison = comparison,
+                        traceGroup = traceGroup,
+                        traceGroupColor = getTraceGroupColor(traceGroup, currentColorMap)
+                    )
+                    nearbyPoints.add(nearbyPoint)
+                }
+                
+                // Limit to avoid too many nearby points
+                if (nearbyPoints.size >= 10) break
+            }
+            
+            // Sort by distance to selected point (closest to furthest)
+            val sortedPoints = nearbyPoints.sortedBy { it.distanceTo(selectedPoint) }
+            Log.d("VolcanoPlot", "Found ${sortedPoints.size} nearby points")
+            
+            
+            return sortedPoints
+            
+        } catch (e: Exception) {
+            Log.e("VolcanoPlot", "Error finding nearby points", e)
+            return emptyList()
+        }
+    }
+    
+    /**
+     * Get the color for a trace group from the color map
+     */
+    private fun getTraceGroupColor(traceGroup: String?, colorMap: Map<String, String>): String? {
+        return if (!traceGroup.isNullOrEmpty() && colorMap.containsKey(traceGroup)) {
+            colorMap[traceGroup]
+        } else {
+            null
+        }
+    }
+    
+    /**
+     * Determine which trace group a data point belongs to (same logic as volcano plot)
+     */
+    private fun determineTraceGroup(
+        proteinId: String, 
+        fcValue: Double, 
+        sigValue: Double, 
+        comparison: String,
+        curtainData: AppData,
+        curtainSettings: CurtainSettings
+    ): String? {
+        // Check if protein is in any user selection first
+        @Suppress("UNCHECKED_CAST")
+        val selectionForId: Map<String, Boolean>? = curtainData.selectedMap[proteinId] as? Map<String, Boolean>
+        
+        if (selectionForId != null) {
+            // Find the first selection this protein belongs to
+            for ((selectionName, selected) in selectionForId) {
+                if (selected) {
+                    return selectionName
+                }
+            }
+        }
+        
+        // If not in any selection, check if background or significance grouping
+        if (curtainSettings.backGroundColorGrey) {
+            return "Background"
+        } else {
+            // Use significance grouping system (same as volcano plot)
+            val (groupText, _) = getSignificantGroup(fcValue, sigValue, curtainSettings)
+            return "$groupText ($comparison)"
+        }
+    }
+    
+    /**
+     * Enable edit mode for annotations
+     */
+    fun enableEditMode() {
+        binding.webView.evaluateJavascript("if (typeof enableAnnotationEditing === 'function') { enableAnnotationEditing(); }", null)
+    }
+    
+    /**
+     * Disable edit mode for annotations
+     */
+    fun disableEditMode() {
+        binding.webView.evaluateJavascript("if (typeof disableAnnotationEditing === 'function') { disableAnnotationEditing(); }", null)
+    }
+    
+    /**
+     * Toggle edit mode for annotations
+     */
+    fun toggleEditMode(enable: Boolean) {
+        Log.d("VolcanoPlot", "toggleEditMode called with enable=$enable")
+        binding.webView.evaluateJavascript("if (typeof toggleEditMode === 'function') { toggleEditMode($enable); }", null)
     }
 
     override fun onDestroyView() {

@@ -336,7 +336,8 @@ class ProteinDetailListTabFragment : Fragment() {
                 colorMap = settings.colorMap,
                 sampleMap = settings.sampleMap,
                 defaultColorList = settings.defaultColorList,
-                conditionOrder = settings.conditionOrder
+                conditionOrder = settings.conditionOrder,
+                barchartColorMap = settings.barchartColorMap
             )
         }
     }
@@ -363,7 +364,8 @@ class ProteinDetailListTabFragment : Fragment() {
                     viewPeptideCount = isPeptideCountEnabled,
                     chartType = selectedChartType
                 )
-            }
+            },
+            fragment = this
         )
         val layoutManager = LinearLayoutManager(requireContext())
         
@@ -394,6 +396,11 @@ class ProteinDetailListTabFragment : Fragment() {
     private fun refreshAllCharts() {
         // Force refresh all charts with new imputation settings
         proteinDetailAdapter.notifyDataSetChanged()
+    }
+    
+    fun refreshChartsWithNewColors() {
+        // Public method to refresh charts when condition colors are updated
+        refreshAllCharts()
     }
     
     private fun updatePaginationInfo() {
@@ -750,6 +757,363 @@ class ProteinDetailListTabFragment : Fragment() {
         }
     }
 
+    /**
+     * Check if a protein is currently annotated in the volcano plot
+     */
+    fun checkIfProteinIsAnnotated(proteinId: String): Boolean {
+        val curtainSettings = viewModel.curtainSettings.value ?: return false
+        
+        // Generate the title for this protein and check if it exists as a key
+        val title = generateAnnotationTitle(proteinId)
+        val isAnnotated = curtainSettings.textAnnotation.containsKey(title)
+        
+        android.util.Log.d("ProteinDetails", "=== CHECKING ANNOTATION FOR $proteinId ===")
+        android.util.Log.d("ProteinDetails", "Generated title: '$title'")
+        android.util.Log.d("ProteinDetails", "Total annotations: ${curtainSettings.textAnnotation.size}")
+        android.util.Log.d("ProteinDetails", "All annotation keys: ${curtainSettings.textAnnotation.keys}")
+        android.util.Log.d("ProteinDetails", "Key exists check: ${curtainSettings.textAnnotation.containsKey(title)}")
+        android.util.Log.d("ProteinDetails", "Final result: $isAnnotated")
+        
+        return isAnnotated
+    }
+    
+    /**
+     * Generate annotation title exactly like Angular frontend:
+     * - If UniProt has gene names and they're not empty: "geneName(proteinId)"
+     * - Otherwise: just "proteinId"
+     * This title is unique and never changes - only annotation text may change
+     */
+    private fun generateAnnotationTitle(proteinId: String): String {
+        val uniprotRecord = viewModel.uniprotService.getUniprotFromPrimary(proteinId)
+        val geneNames = uniprotRecord?.get("Gene Names")?.toString()
+        
+        android.util.Log.d("ProteinDetails", "=== GENERATING TITLE FOR $proteinId ===")
+        android.util.Log.d("ProteinDetails", "UniProt record found: ${uniprotRecord != null}")
+        android.util.Log.d("ProteinDetails", "Raw gene names: '$geneNames'")
+        
+        val title = if (!geneNames.isNullOrEmpty() && geneNames != proteinId) {
+            "${geneNames}(${proteinId})"
+        } else {
+            proteinId
+        }
+        
+        android.util.Log.d("ProteinDetails", "Generated title: '$title'")
+        return title
+    }
+    
+    /**
+     * Toggle annotation for a specific protein (add or remove)
+     */
+    fun toggleProteinAnnotation(proteinId: String, annotate: Boolean) {
+        android.util.Log.d("ProteinDetails", "toggleProteinAnnotation called: proteinId=$proteinId, annotate=$annotate")
+        android.util.Log.d("ProteinDetails", "Fragment lifecycle state: ${lifecycle.currentState}")
+        android.util.Log.d("ProteinDetails", "View bound: ${_binding != null}")
+        
+        if (annotate) {
+            // Add annotation directly to settings
+            android.util.Log.d("ProteinDetails", "Adding annotation for $proteinId")
+            showAddAnnotationDialog(proteinId)
+        } else {
+            // Remove annotation directly from settings
+            android.util.Log.d("ProteinDetails", "Removing annotation for $proteinId")
+            removeAnnotationFromSettings(proteinId)
+            android.widget.Toast.makeText(
+                requireContext(),
+                "Annotation removed for $proteinId",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    /**
+     * Show dialog to add annotation with custom text
+     */
+    private fun showAddAnnotationDialog(proteinId: String) {
+        val curtainData = viewModel.curtainData.value ?: return
+        
+        // Get gene name for default text
+        val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+        val diffForm = curtainData.differentialForm
+        val idColumn = diffForm.primaryIDs
+        val geneColumn = diffForm.geneNames
+        
+        val dataPoint = processedData?.find { row ->
+            val primaryId = row[idColumn]?.toString()
+            primaryId == proteinId
+        }
+        
+        val geneName = dataPoint?.get(geneColumn)?.toString() ?: proteinId
+        val defaultText = if (geneName.isNotBlank() && geneName != proteinId) "$geneName ($proteinId)" else proteinId
+        
+        // Create input dialog
+        val input = android.widget.EditText(requireContext())
+        input.setText(defaultText)
+        input.selectAll()
+        
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Add Annotation")
+            .setMessage("Enter annotation text for $proteinId:")
+            .setView(input)
+            .setPositiveButton("Add") { _, _ ->
+                val customText = input.text.toString().trim()
+                if (customText.isNotEmpty()) {
+                    addAnnotationToSettings(proteinId, customText)
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        "Annotation added for $proteinId",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        "Text cannot be empty",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    /**
+     * Add annotation directly to curtain settings
+     */
+    private fun addAnnotationToSettings(proteinId: String, customText: String? = null) {
+        val curtainData = viewModel.curtainData.value ?: return
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        // Get differential data to find the data point
+        val processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
+        if (processedData == null) {
+            android.util.Log.e("ProteinDetails", "No processed differential data available for annotation")
+            return
+        }
+        
+        // Get differential form settings
+        val diffForm = curtainData.differentialForm
+        val fcColumn = diffForm.foldChange
+        val sigColumn = diffForm.significant
+        val idColumn = diffForm.primaryIDs
+        val geneColumn = diffForm.geneNames
+        
+        // Find the data point for this protein ID
+        val dataPoint = processedData.find { row ->
+            val primaryId = row[idColumn]?.toString()
+            primaryId == proteinId
+        }
+        
+        if (dataPoint == null) {
+            android.util.Log.w("ProteinDetails", "No data found for protein ID: $proteinId")
+            return
+        }
+        
+        // Create annotation data structure (matching Angular frontend pattern)
+        // Use the same coordinate extraction logic as volcano plot
+        val x = when (val fc = dataPoint[fcColumn]) {
+            is Number -> {
+                val doubleValue = fc.toDouble()
+                if (doubleValue.isNaN()) 0.0 else doubleValue
+            }
+            is String -> fc.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+        
+        val y = when (val sig = dataPoint[sigColumn]) {
+            is Number -> {
+                val doubleValue = sig.toDouble()
+                if (doubleValue.isNaN()) 0.0 else doubleValue
+            }
+            is String -> sig.toDoubleOrNull() ?: 0.0
+            else -> 0.0
+        }
+        // Generate unique annotation title exactly like Angular frontend
+        val title = generateAnnotationTitle(proteinId)
+        
+        // Check if annotation already exists using the title as key
+        val existingAnnotations = curtainSettings.textAnnotation.toMutableMap()
+        if (existingAnnotations.containsKey(title)) {
+            android.util.Log.d("ProteinDetails", "Annotation already exists for $proteinId with title: $title")
+            return
+        }
+        
+        // Use custom text for the annotation display if provided, otherwise use title
+        val annotationText = customText ?: title
+        
+        // Create annotation data structure exactly matching Angular frontend
+        val annotationData = mapOf(
+            "primary_id" to proteinId,
+            "title" to title,
+            "data" to mapOf(
+                "xref" to "x",
+                "yref" to "y",
+                "x" to x,
+                "y" to y,
+                "text" to "<b>$annotationText</b>",
+                "showarrow" to true,
+                "arrowhead" to 1,
+                "arrowsize" to 1.0,
+                "arrowwidth" to 1.0,
+                "ax" to -20.0,
+                "ay" to -20.0,
+                "font" to mapOf(
+                    "size" to 15,
+                    "color" to "#000000",
+                    "family" to "Arial, sans-serif"
+                ),
+                "showannotation" to true,
+                "annotationID" to title,
+                "draggable" to true
+            )
+        )
+        
+        // Update settings with new annotation
+        existingAnnotations[title] = annotationData
+        
+        val updatedSettings = curtainSettings.copy(textAnnotation = existingAnnotations)
+        viewModel.updateCurtainSettings(updatedSettings)
+        
+        // Trigger volcano plot refresh to show the new annotation
+        viewModel.refreshFromSearchUpdate()
+        
+        android.util.Log.d("ProteinDetails", "=== ANNOTATION CREATED ===")
+        android.util.Log.d("ProteinDetails", "Protein ID: $proteinId")
+        android.util.Log.d("ProteinDetails", "Generated title: '$title'")
+        android.util.Log.d("ProteinDetails", "Annotation coordinates: ($x, $y)")
+        android.util.Log.d("ProteinDetails", "Total annotations now: ${existingAnnotations.size}")
+        android.util.Log.d("ProteinDetails", "All annotation keys after creation: ${existingAnnotations.keys}")
+        android.util.Log.d("ProteinDetails", "Key '$title' exists in map: ${existingAnnotations.containsKey(title)}")
+        android.util.Log.d("ProteinDetails", "Triggering volcano plot refresh")
+    }
+    
+    /**
+     * Remove annotation directly from curtain settings
+     */
+    private fun removeAnnotationFromSettings(proteinId: String) {
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        // Generate the title for this protein
+        val title = generateAnnotationTitle(proteinId)
+        val existingAnnotations = curtainSettings.textAnnotation.toMutableMap()
+        
+        // Remove annotation using the title as key
+        val wasRemoved = existingAnnotations.remove(title) != null
+        
+        if (wasRemoved) {
+            // Update settings
+            val updatedSettings = curtainSettings.copy(textAnnotation = existingAnnotations)
+            viewModel.updateCurtainSettings(updatedSettings)
+            
+            // Trigger volcano plot refresh to show the annotation removal
+            viewModel.refreshFromSearchUpdate()
+            
+            android.util.Log.d("ProteinDetails", "Removed annotation '$title' for $proteinId from settings")
+        } else {
+            android.util.Log.w("ProteinDetails", "No annotation found to remove for $proteinId with title '$title'")
+        }
+    }
+    
+    /**
+     * Show dialog to edit annotation text for a protein
+     */
+    fun showEditAnnotationDialog(proteinId: String) {
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        // Generate the title for this protein and find the annotation
+        val title = generateAnnotationTitle(proteinId)
+        val existingAnnotations = curtainSettings.textAnnotation
+        val annotationData = existingAnnotations[title]
+        
+        if (annotationData == null) {
+            android.util.Log.w("ProteinDetails", "No annotation found for $proteinId with title '$title'")
+            android.widget.Toast.makeText(
+                requireContext(),
+                "No annotation found for $proteinId",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        
+        android.util.Log.d("ProteinDetails", "Found annotation for editing: title='$title'")
+        
+        // Extract current text from annotation
+        val annotationMap = annotationData as? Map<*, *>
+        val annotationDataInner = annotationMap?.get("data") as? Map<*, *>
+        val currentText = annotationDataInner?.get("text")?.toString() ?: ""
+        val cleanCurrentText = currentText.replace("<b>", "").replace("</b>", "")
+        
+        // Create input dialog
+        val input = android.widget.EditText(requireContext())
+        input.setText(cleanCurrentText)
+        input.selectAll()
+        
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Edit Annotation Text")
+            .setMessage("Edit the text for $proteinId annotation:")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                val newText = input.text.toString().trim()
+                if (newText.isNotEmpty()) {
+                    updateAnnotationText(proteinId, newText)
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        "Annotation text updated",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        "Text cannot be empty",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    /**
+     * Update the text content of an existing annotation
+     */
+    private fun updateAnnotationText(proteinId: String, newText: String) {
+        val curtainSettings = viewModel.curtainSettings.value ?: return
+        
+        // Generate the title for this protein and find the annotation
+        val title = generateAnnotationTitle(proteinId)
+        val existingAnnotations = curtainSettings.textAnnotation.toMutableMap()
+        val annotationData = existingAnnotations[title]
+        
+        if (annotationData != null) {
+            // Update the annotation text while keeping the same title/key
+            val annotationMap = annotationData as? Map<*, *>
+            val annotationDataInner = annotationMap?.get("data") as? Map<*, *>
+            
+            if (annotationDataInner != null) {
+                val updatedDataInner = annotationDataInner.toMutableMap()
+                updatedDataInner["text"] = "<b>$newText</b>"
+                // Keep the same annotationID (which should match the title)
+                updatedDataInner["annotationID"] = title
+                
+                val updatedAnnotationData = (annotationMap as Map<*, *>).toMutableMap()
+                updatedAnnotationData["data"] = updatedDataInner
+                // Keep the same title - only the display text changes
+                
+                // Update the annotation using the same key/title
+                existingAnnotations[title] = updatedAnnotationData
+                
+                // Update settings
+                val updatedSettings = curtainSettings.copy(textAnnotation = existingAnnotations)
+                viewModel.updateCurtainSettings(updatedSettings)
+                
+                // Trigger volcano plot refresh
+                viewModel.refreshFromSearchUpdate()
+                
+                android.util.Log.d("ProteinDetails", "Updated annotation text for '$title': '$newText'")
+            }
+        } else {
+            android.util.Log.w("ProteinDetails", "No annotation found to update for $proteinId with title '$title'")
+        }
+    }
+
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
@@ -783,7 +1147,8 @@ class ProteinDetailListTabFragment : Fragment() {
     // Adapter classes
     class ProteinDetailAdapter(
         private val colorMapProvider: () -> Map<String, String>,
-        private val imputationProvider: () -> ImputationSettings
+        private val imputationProvider: () -> ImputationSettings,
+        private val fragment: ProteinDetailListTabFragment
     ) : RecyclerView.Adapter<ProteinDetailAdapter.ProteinDetailViewHolder>() {
         private var proteinDetails = listOf<ProteinDetail>()
         private var colorMap = mapOf<String, String>()
@@ -802,7 +1167,7 @@ class ProteinDetailListTabFragment : Fragment() {
             val binding = ItemProteinDetailBinding.inflate(
                 LayoutInflater.from(parent.context), parent, false
             )
-            return ProteinDetailViewHolder(binding)
+            return ProteinDetailViewHolder(binding, fragment)
         }
 
         override fun onBindViewHolder(holder: ProteinDetailViewHolder, position: Int) {
@@ -813,8 +1178,10 @@ class ProteinDetailListTabFragment : Fragment() {
 
         override fun getItemCount(): Int = proteinDetails.size
 
-        class ProteinDetailViewHolder(private val binding: ItemProteinDetailBinding) : 
-            RecyclerView.ViewHolder(binding.root) {
+        class ProteinDetailViewHolder(
+            private val binding: ItemProteinDetailBinding,
+            private val fragment: ProteinDetailListTabFragment
+        ) : RecyclerView.ViewHolder(binding.root) {
 
             private var currentChartType = ChartType.INDIVIDUAL_BAR
             private var currentErrorBarType = PlotlyChartGenerator.ErrorBarType.STANDARD_ERROR
@@ -832,7 +1199,8 @@ class ProteinDetailListTabFragment : Fragment() {
 
                     // Setup protein menu button
                     proteinMenuButton.setOnClickListener {
-                        showProteinOptionsDialog(proteinDetail, colorMap, imputationSettings)
+                        android.util.Log.d("ProteinDetails", "Menu button clicked for ${proteinDetail.proteinId}")
+                        showProteinMenuDialog(proteinDetail, colorMap, imputationSettings)
                     }
 
                     // Setup chart WebView with current chart type
@@ -843,6 +1211,65 @@ class ProteinDetailListTabFragment : Fragment() {
                         showRawDataDialog(proteinDetail)
                     }
                 }
+            }
+
+            private fun showProteinMenuDialog(proteinDetail: ProteinDetail, colorMap: Map<String, String>, imputationSettings: ImputationSettings) {
+                android.util.Log.d("ProteinDetails", "showProteinMenuDialog called for ${proteinDetail.proteinId}")
+                val isAnnotated = checkIfProteinIsAnnotated(proteinDetail.proteinId)
+                android.util.Log.d("ProteinDetails", "Is protein annotated: $isAnnotated")
+                val options = if (isAnnotated) {
+                    arrayOf(
+                        "Visualization Options",
+                        "Edit Annotation Text",
+                        "Remove Annotation"
+                    )
+                } else {
+                    arrayOf(
+                        "Visualization Options",
+                        "Add Annotation"
+                    )
+                }
+                
+                androidx.appcompat.app.AlertDialog.Builder(itemView.context)
+                    .setTitle("${proteinDetail.geneName} (${proteinDetail.proteinId})")
+                    .setItems(options) { _, which ->
+                        android.util.Log.d("ProteinDetails", "Menu item $which selected for ${proteinDetail.proteinId}")
+                        android.util.Log.d("ProteinDetails", "Available options: ${options.contentToString()}")
+                        when (which) {
+                            0 -> {
+                                android.util.Log.d("ProteinDetails", "Visualization Options selected")
+                                showProteinOptionsDialog(proteinDetail, colorMap, imputationSettings)
+                            }
+                            1 -> {
+                                android.util.Log.d("ProteinDetails", "Menu option 1 selected (isAnnotated: $isAnnotated)")
+                                if (isAnnotated) {
+                                    // Edit annotation text
+                                    showEditAnnotationDialog(proteinDetail.proteinId)
+                                } else {
+                                    // Add annotation directly without dialog
+                                    android.util.Log.d("ProteinDetails", "Add annotation selected for ${proteinDetail.proteinId}")
+                                    fragment.addAnnotationToSettings(proteinDetail.proteinId)
+                                    android.widget.Toast.makeText(
+                                        itemView.context,
+                                        "Annotation added for ${proteinDetail.proteinId}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                            2 -> {
+                                // Remove annotation directly (only available when annotated)
+                                android.util.Log.d("ProteinDetails", "Remove annotation selected for ${proteinDetail.proteinId}")
+                                fragment.removeAnnotationFromSettings(proteinDetail.proteinId)
+                                android.widget.Toast.makeText(
+                                    itemView.context,
+                                    "Annotation removed for ${proteinDetail.proteinId}",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
 
             private fun showProteinOptionsDialog(proteinDetail: ProteinDetail, colorMap: Map<String, String>, imputationSettings: ImputationSettings) {
@@ -857,6 +1284,8 @@ class ProteinDetailListTabFragment : Fragment() {
                 val errorBarChips = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.errorBarChips)
                 val pointsSection = dialogView.findViewById<android.widget.LinearLayout>(R.id.pointsSection)
                 val showPointsSwitch = dialogView.findViewById<com.google.android.material.switchmaterial.SwitchMaterial>(R.id.showPointsSwitch)
+                
+                
                 val cancelButton = dialogView.findViewById<android.widget.Button>(R.id.cancelButton)
                 val applyButton = dialogView.findViewById<android.widget.Button>(R.id.applyButton)
                 
@@ -931,6 +1360,27 @@ class ProteinDetailListTabFragment : Fragment() {
                 }
                 
                 dialog.show()
+            }
+            
+            /**
+             * Check if a protein is currently annotated in the volcano plot
+             */
+            private fun checkIfProteinIsAnnotated(proteinId: String): Boolean {
+                return fragment.checkIfProteinIsAnnotated(proteinId)
+            }
+            
+            /**
+             * Toggle annotation for a specific protein
+             */
+            private fun toggleProteinAnnotation(proteinId: String, annotate: Boolean) {
+                fragment.toggleProteinAnnotation(proteinId, annotate)
+            }
+            
+            /**
+             * Show dialog to edit annotation text
+             */
+            private fun showEditAnnotationDialog(proteinId: String) {
+                fragment.showEditAnnotationDialog(proteinId)
             }
             
 
@@ -1036,7 +1486,7 @@ class ProteinDetailListTabFragment : Fragment() {
                             viewPeptideCount = imputationSettings.viewPeptideCount,
                             enableImputation = imputationSettings.isEnabled,
                             chartType = imputationSettings.chartType,
-                            conditionColorService = null,
+                            conditionColorService = fragment.conditionColorService,
                             errorBarType = currentErrorBarType,
                             showIndividualPoints = showIndividualPoints,
                             violinPointPosition = -1.2

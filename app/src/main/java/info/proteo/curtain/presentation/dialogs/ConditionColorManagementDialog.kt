@@ -4,6 +4,7 @@ import android.app.Dialog
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -250,6 +251,8 @@ class ConditionColorManagementDialog : DialogFragment() {
         }
 
         binding.applyButton.setOnClickListener {
+            // Sync condition colors back to curtain settings barchartColorMap
+            syncColorsToSettings()
             onColorsUpdated?.invoke()
             dismiss()
         }
@@ -327,6 +330,43 @@ class ConditionColorManagementDialog : DialogFragment() {
             
             val condition = colorInfo[fromPosition].condition
             conditionColorService.moveCondition(condition, toPosition)
+        }
+    }
+
+    private fun syncColorsToSettings() {
+        // Sync condition colors back to curtain settings
+        try {
+            val currentSettings = viewModel.curtainSettings.value
+            if (currentSettings != null) {
+                // Get the current color overrides from ConditionColorService
+                val colorOverrides = conditionColorService.getColorOverrides(currentSettings.colorMap)
+                
+                // Create updated barchartColorMap
+                val updatedBarchartColorMap = currentSettings.barchartColorMap.toMutableMap()
+                
+                // Add/update overrides
+                colorOverrides.forEach { (condition, color) ->
+                    updatedBarchartColorMap[condition] = color
+                }
+                
+                // Remove conditions that now match the general colorMap
+                val generalColorMap = currentSettings.colorMap
+                updatedBarchartColorMap.keys.removeAll { condition ->
+                    generalColorMap[condition] == updatedBarchartColorMap[condition]
+                }
+                
+                // Update settings with new barchartColorMap
+                val updatedSettings = currentSettings.copy(
+                    barchartColorMap = updatedBarchartColorMap
+                )
+                
+                // Update the ViewModel settings
+                viewModel.updateCurtainSettings(updatedSettings)
+                
+                Log.d("ConditionColorDialog", "Synced ${colorOverrides.size} color overrides to barchartColorMap")
+            }
+        } catch (e: Exception) {
+            Log.e("ConditionColorDialog", "Failed to sync colors to settings", e)
         }
     }
 
