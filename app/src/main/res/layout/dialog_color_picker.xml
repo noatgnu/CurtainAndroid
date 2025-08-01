@@ -19,8 +19,8 @@
         android:id="@+id/listNameText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:layout_marginBottom="24dp"
+        android:textSize="14sp"
+        android:layout_marginBottom="12dp"
         tools:text="List Name: Kinases" />
 
     <!-- Current Color Display -->
@@ -29,7 +29,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="16dp">
+        android:layout_marginBottom="8dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -42,8 +42,7 @@
             android:id="@+id/currentColorPreview"
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:background="@drawable/circle_background"
-            tools:backgroundTint="#fd7f6f" />
+            tools:background="#fd7f6f" />
 
         <TextView
             android:id="@+id/currentColorText"
@@ -64,15 +63,16 @@
         android:text="Choose from palette:"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:layout_marginBottom="8dp" />
+        android:layout_marginBottom="6dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/colorPaletteGrid"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        tools:itemCount="9"
-        tools:spanCount="3" />
+        android:layout_width="192dp"
+        android:layout_height="120dp"
+        android:layout_marginBottom="12dp"
+        android:layout_gravity="center_horizontal"
+        tools:itemCount="24"
+        tools:spanCount="8" />
 
     <!-- Custom Color Input -->
     <TextView
@@ -90,7 +90,7 @@
         android:hint="Hex color (e.g., #ff0000)"
         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         app:startIconDrawable="@drawable/ic_color_palette"
-        android:layout_marginBottom="24dp">
+        android:layout_marginBottom="16dp">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/customColorInput"
@@ -101,35 +101,5 @@
 
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Action Buttons -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="end">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/cancelButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Cancel"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_marginEnd="8dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/resetButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Reset"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_marginEnd="8dp" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/applyButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Apply" />
-
-    </LinearLayout>
 
 </LinearLayout>

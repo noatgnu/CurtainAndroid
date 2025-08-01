@@ -60,14 +60,58 @@ class ConditionColorManagementDialog : DialogFragment() {
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         _binding = DialogConditionColorManagementBinding.inflate(layoutInflater)
 
-        setupViews()
         setupPaletteSelection()
         setupRecyclerViews()
+        setupViews()
         setupButtons()
 
         return MaterialAlertDialogBuilder(requireContext())
             .setView(binding.root)
-            .create()
+            .setPositiveButton("Apply") { _, _ ->
+                // Sync condition colors back to curtain settings barchartColorMap
+                syncColorsToSettings()
+                onColorsUpdated?.invoke()
+            }
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Reset") { _, _ ->
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Reset All Colors")
+                    .setMessage("This will reset all condition colors to use the current palette. Custom colors will be lost.")
+                    .setPositiveButton("Reset") { _, _ ->
+                        conditionColorService.resetToCurrentPalette()
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+            .create().apply {
+                setOnShowListener {
+                    // Set icons for buttons after dialog is shown
+                    getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_check), 
+                            null, null, null
+                        )
+                        contentDescription = "Apply"
+                    }
+                    getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_close), 
+                            null, null, null
+                        )
+                        contentDescription = "Cancel"
+                    }
+                    getButton(android.app.AlertDialog.BUTTON_NEUTRAL)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_refresh), 
+                            null, null, null
+                        )
+                        contentDescription = "Reset All"
+                    }
+                }
+            }
     }
     
     override fun onStart() {
@@ -86,6 +130,7 @@ class ConditionColorManagementDialog : DialogFragment() {
     private fun setupViews() {
         // Extract sample data from current curtain data if available
         extractSampleDataFromCurtain()
+        updateConditionAssignments()
         updateStatistics()
         checkEmptyState()
     }
@@ -235,27 +280,7 @@ class ConditionColorManagementDialog : DialogFragment() {
     }
 
     private fun setupButtons() {
-        binding.resetButton.setOnClickListener {
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Reset All Colors")
-                .setMessage("This will reset all condition colors to use the current palette. Custom colors will be lost.")
-                .setPositiveButton("Reset") { _, _ ->
-                    conditionColorService.resetToCurrentPalette()
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-        }
-
-        binding.cancelButton.setOnClickListener {
-            dismiss()
-        }
-
-        binding.applyButton.setOnClickListener {
-            // Sync condition colors back to curtain settings barchartColorMap
-            syncColorsToSettings()
-            onColorsUpdated?.invoke()
-            dismiss()
-        }
+        // Buttons are now handled by dialog buttons - no custom button setup needed
     }
 
     private fun observeColorChanges() {
@@ -281,12 +306,15 @@ class ConditionColorManagementDialog : DialogFragment() {
     }
 
     private fun updateConditionAssignments() {
-        val colorInfo = conditionColorService.getConditionColorInfo(sampleMap)
+        // Transform sampleMap to the format expected by ConditionColorService
+        val transformedSampleMap = transformSampleMapForColorService(sampleMap)
+        val colorInfo = conditionColorService.getConditionColorInfo(transformedSampleMap)
         conditionAssignmentAdapter.updateConditions(colorInfo)
     }
 
     private fun updateStatistics() {
-        val colorInfo = conditionColorService.getConditionColorInfo(sampleMap)
+        val transformedSampleMap = transformSampleMapForColorService(sampleMap)
+        val colorInfo = conditionColorService.getConditionColorInfo(transformedSampleMap)
         val totalSamples = sampleMap?.values?.sumOf { it.size } ?: 0
         val customCount = colorInfo.count { it.isCustom }
 
@@ -295,6 +323,24 @@ class ConditionColorManagementDialog : DialogFragment() {
         binding.customColorsText.text = "$customCount"
 
         binding.statisticsLayout.visibility = View.VISIBLE
+    }
+    
+    /**
+     * Transform sampleMap from "Condition -> Map<Sample, Info>" to "Sample -> Map<condition, Condition>"
+     * which is the format expected by ConditionColorService.getConditionColorInfo()
+     */
+    private fun transformSampleMapForColorService(sampleMap: Map<String, Map<String, String>>?): Map<String, Map<String, String>>? {
+        if (sampleMap == null) return null
+        
+        val transformed = mutableMapOf<String, Map<String, String>>()
+        
+        sampleMap.forEach { (condition, samples) ->
+            samples.keys.forEach { sampleName ->
+                transformed[sampleName] = mapOf("condition" to condition)
+            }
+        }
+        
+        return transformed
     }
 
     private fun checkEmptyState() {
@@ -309,6 +355,9 @@ class ConditionColorManagementDialog : DialogFragment() {
             currentColor = currentColor
         ) { newColor ->
             conditionColorService.setConditionColor(condition, newColor)
+            // Refresh the dialog to show the new color
+            updateConditionAssignments()
+            updateStatistics()
         }
         colorPicker.show(parentFragmentManager, "ConditionColorPicker")
     }
@@ -334,7 +383,9 @@ class ConditionColorManagementDialog : DialogFragment() {
     }
 
     private fun syncColorsToSettings() {
-        // Sync condition colors back to curtain settings
+        // Update in-memory curtain settings (like textAnnotation and search groups)
+        // This reflects in plots immediately but doesn't save to original JSON file
+        // Only saved permanently when user saves a settings variant
         try {
             val currentSettings = viewModel.curtainSettings.value
             if (currentSettings != null) {
@@ -355,18 +406,18 @@ class ConditionColorManagementDialog : DialogFragment() {
                     generalColorMap[condition] == updatedBarchartColorMap[condition]
                 }
                 
-                // Update settings with new barchartColorMap
+                // Update in-memory settings (like textAnnotation does)
                 val updatedSettings = currentSettings.copy(
                     barchartColorMap = updatedBarchartColorMap
                 )
                 
-                // Update the ViewModel settings
+                // Update the ViewModel settings (in-memory only, not saved to file)
                 viewModel.updateCurtainSettings(updatedSettings)
                 
-                Log.d("ConditionColorDialog", "Synced ${colorOverrides.size} color overrides to barchartColorMap")
+                Log.d("ConditionColorDialog", "Updated in-memory settings with ${colorOverrides.size} color overrides")
             }
         } catch (e: Exception) {
-            Log.e("ConditionColorDialog", "Failed to sync colors to settings", e)
+            Log.e("ConditionColorDialog", "Failed to sync colors to in-memory settings", e)
         }
     }
 
@@ -431,11 +482,11 @@ class PalettePreviewAdapter : RecyclerView.Adapter<PalettePreviewAdapter.ColorVi
         fun bind(color: String, index: Int) {
             try {
                 val colorInt = Color.parseColor(color)
-                binding.colorCircle.setCardBackgroundColor(colorInt)
+                binding.colorSquare.setCardBackgroundColor(colorInt)
                 binding.colorIndex.text = (index + 1).toString()
                 binding.colorIndex.visibility = View.VISIBLE
             } catch (e: Exception) {
-                binding.colorCircle.setCardBackgroundColor(Color.GRAY)
+                binding.colorSquare.setCardBackgroundColor(Color.GRAY)
                 binding.colorIndex.visibility = View.GONE
             }
         }
@@ -502,14 +553,11 @@ class ConditionAssignmentAdapter(
             // Set color indicator
             try {
                 val colorInt = Color.parseColor(conditionInfo.color)
-                binding.colorIndicator.setCardBackgroundColor(colorInt)
+                binding.colorIndicator.setBackgroundColor(colorInt)
             } catch (e: Exception) {
-                binding.colorIndicator.setCardBackgroundColor(Color.GRAY)
+                binding.colorIndicator.setBackgroundColor(Color.GRAY)
             }
 
-            // Show custom indicator
-            binding.customBadge.visibility = if (conditionInfo.isCustom) View.VISIBLE else View.GONE
-            binding.customIndicator.visibility = if (conditionInfo.isCustom) View.VISIBLE else View.GONE
 
             // Set click listeners
             binding.colorIndicator.setOnClickListener {

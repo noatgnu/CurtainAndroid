@@ -21,6 +21,7 @@ import info.proteo.curtain.data.services.ConditionColorService
 import info.proteo.curtain.presentation.viewmodels.CurtainDetailsViewModel
 import info.proteo.curtain.utils.PlotlyChartGenerator
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -84,6 +85,7 @@ class ProteinDetailListTabFragment : Fragment() {
         setupChartControls()
         setupSearchFilter()
         observeSearchState()
+        observeColorChanges()
         
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -355,7 +357,7 @@ class ProteinDetailListTabFragment : Fragment() {
 
     private fun setupRecyclerView() {
         proteinDetailAdapter = ProteinDetailAdapter(
-            colorMapProvider = { viewModel.curtainSettings.value?.colorMap ?: mapOf() },
+            colorMapProvider = { conditionColorService.conditionColors.value },
             imputationProvider = { 
                 ImputationSettings(
                     isEnabled = isImputationEnabled,
@@ -1114,6 +1116,24 @@ class ProteinDetailListTabFragment : Fragment() {
         }
     }
 
+    private fun observeColorChanges() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                conditionColorService.conditionColors.collectLatest { colors: Map<String, String> ->
+                    // When condition colors change, refresh all visible plots
+                    refreshVisiblePlots()
+                }
+            }
+        }
+    }
+    
+    private fun refreshVisiblePlots() {
+        // Refresh all currently visible protein detail plots
+        val adapter = binding.recyclerView.adapter as? ProteinDetailAdapter
+        android.util.Log.d("ProteinDetails", "Refreshing visible plots due to color changes")
+        adapter?.refreshAllVisiblePlots()
+    }
+    
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
@@ -1160,6 +1180,12 @@ class ProteinDetailListTabFragment : Fragment() {
         
         fun updateColorMap(newColorMap: Map<String, String>) {
             colorMap = newColorMap
+            notifyDataSetChanged()
+        }
+        
+        fun refreshAllVisiblePlots() {
+            // Update color map from the provider and refresh all plots
+            colorMap = colorMapProvider()
             notifyDataSetChanged()
         }
 

@@ -4,8 +4,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginHorizontal="4dp"
-    android:layout_marginVertical="2dp"
+    android:layout_marginHorizontal="2dp"
+    android:layout_marginVertical="1dp"
     app:cardCornerRadius="8dp"
     app:cardElevation="1dp"
     app:cardBackgroundColor="?attr/colorSurface"
@@ -18,33 +18,16 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="12dp">
+        android:padding="8dp">
 
         <!-- Color Indicator -->
-        <com.google.android.material.card.MaterialCardView
+        <View
             android:id="@+id/colorIndicator"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginEnd="12dp"
-            app:cardCornerRadius="18dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="@color/primary"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?android:attr/selectableItemBackground"
-            tools:cardBackgroundColor="#fd7f6f">
-
-            <ImageView
-                android:id="@+id/customIndicator"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:layout_gravity="center"
-                android:src="@drawable/ic_edit"
-                android:visibility="gone"
-                app:tint="@android:color/white"
-                android:alpha="0.7" />
-
-        </com.google.android.material.card.MaterialCardView>
+            android:layout_width="4dp"
+            android:layout_height="32dp"
+            android:layout_marginEnd="8dp"
+            android:background="@color/primary"
+            tools:background="#fd7f6f" />
 
         <!-- Trace Group Information -->
         <LinearLayout
@@ -57,7 +40,7 @@
                 android:id="@+id/traceGroupName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="16sp"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="?android:attr/textColorPrimary"
                 android:ellipsize="end"
@@ -69,20 +52,20 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:layout_marginTop="2dp">
+                android:layout_marginTop="1dp">
 
                 <TextView
                     android:id="@+id/pointCount"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:textColor="?android:attr/textColorSecondary"
                     tools:text="145 points" />
 
                 <View
-                    android:layout_width="4dp"
-                    android:layout_height="4dp"
-                    android:layout_marginHorizontal="8dp"
+                    android:layout_width="3dp"
+                    android:layout_height="3dp"
+                    android:layout_marginHorizontal="6dp"
                     android:background="?android:attr/textColorSecondary"
                     android:alpha="0.5" />
 
@@ -90,23 +73,11 @@
                     android:id="@+id/colorValue"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:fontFamily="monospace"
                     android:textColor="?android:attr/textColorSecondary"
                     tools:text="#fd7f6f" />
 
-                <TextView
-                    android:id="@+id/customBadge"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Custom"
-                    android:textSize="10sp"
-                    android:textColor="?attr/colorPrimary"
-                    android:background="@drawable/badge_custom_color"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="2dp"
-                    android:visibility="gone" />
 
             </LinearLayout>
 
@@ -120,8 +91,8 @@
 
             <ImageButton
                 android:id="@+id/dragHandle"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_drag_handle"
                 android:contentDescription="Drag to reorder"
@@ -130,8 +101,8 @@
 
             <ImageButton
                 android:id="@+id/resetColorButton"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_refresh"
                 android:contentDescription="Reset to palette color"
@@ -140,8 +111,8 @@
 
             <ImageButton
                 android:id="@+id/editColorButton"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
                 android:background="?android:attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_edit"
                 android:contentDescription="Edit color"

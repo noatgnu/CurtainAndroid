@@ -3,6 +3,7 @@ package info.proteo.curtain.presentation.dialogs
 import android.app.Dialog
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -65,7 +66,49 @@ class TraceColorManagementDialog : DialogFragment() {
 
         return MaterialAlertDialogBuilder(requireContext())
             .setView(binding.root)
-            .create()
+            .setPositiveButton("Apply") { _, _ ->
+                onColorsUpdated?.invoke()
+            }
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Reset") { _, _ ->
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Reset All Colors")
+                    .setMessage("This will reset all trace colors to use the current palette. Custom colors will be lost.")
+                    .setPositiveButton("Reset") { _, _ ->
+                        // Reset trace colors logic would go here
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+            .create().apply {
+                setOnShowListener {
+                    // Set icons for buttons after dialog is shown
+                    getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_check), 
+                            null, null, null
+                        )
+                        contentDescription = "Apply"
+                    }
+                    getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_close), 
+                            null, null, null
+                        )
+                        contentDescription = "Cancel"
+                    }
+                    getButton(android.app.AlertDialog.BUTTON_NEUTRAL)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_refresh), 
+                            null, null, null
+                        )
+                        contentDescription = "Reset All"
+                    }
+                }
+            }
     }
     
     override fun onStart() {
@@ -82,47 +125,11 @@ class TraceColorManagementDialog : DialogFragment() {
     }
 
     private fun setupViews() {
-        extractTraceDataFromVolcanoPlot()
         updateStatistics()
         checkEmptyState()
     }
     
-    private fun extractTraceDataFromVolcanoPlot() {
-        try {
-            // Extract trace group data from volcano plot
-            val curtainSettings = viewModel.curtainSettings.value
-            if (curtainSettings != null) {
-                // Create trace groups based on volcano plot significance thresholds
-                val traceGroupMap = mutableMapOf<String, Int>()
-                
-                // Default volcano plot trace groups
-                traceGroupMap["Significant Up"] = 150
-                traceGroupMap["Significant Down"] = 120
-                traceGroupMap["Not Significant"] = 800
-                
-                // TODO: Extract actual point counts from volcano plot data
-                // This would require parsing the current volcano plot data to count points
-                // in each significance category based on fold change and p-value thresholds
-                
-                traceGroups = traceGroupMap
-                return
-            }
-            
-            // Fallback to sample trace groups
-            createSampleTraceData()
-            
-        } catch (e: Exception) {
-            createSampleTraceData()
-        }
-    }
-    
-    private fun createSampleTraceData() {
-        traceGroups = mapOf(
-            "Significant Up" to 145,
-            "Significant Down" to 98,
-            "Not Significant" to 756
-        )
-    }
+
 
     private fun setupPaletteSelection() {
         val paletteNames = conditionColorService.availablePalettes.keys.toList()
@@ -183,25 +190,7 @@ class TraceColorManagementDialog : DialogFragment() {
     }
 
     private fun setupButtons() {
-        binding.resetButton.setOnClickListener {
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle("Reset All Colors")
-                .setMessage("This will reset all trace colors to use the current palette. Custom colors will be lost.")
-                .setPositiveButton("Reset") { _, _ ->
-                    resetAllTraceColors()
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-        }
-
-        binding.cancelButton.setOnClickListener {
-            dismiss()
-        }
-
-        binding.applyButton.setOnClickListener {
-            onColorsUpdated?.invoke()
-            dismiss()
-        }
+        // Buttons are now handled by dialog buttons - no custom button setup needed
     }
 
     private fun observeColorChanges() {
@@ -225,14 +214,21 @@ class TraceColorManagementDialog : DialogFragment() {
 
     private fun getTraceColorInfo(): List<TraceColorInfo> {
         val colors = conditionColorService.getCurrentPaletteColors()
-        return traceGroups?.entries?.mapIndexed { index, (traceGroup, pointCount) ->
-            val paletteColor = colors[index % colors.size]
-            // TODO: Check for custom colors in settings
+        val curtainSettings = viewModel.curtainSettings.value
+        val colorMap = curtainSettings?.colorMap ?: mapOf()
+        
+        return traceGroups?.entries?.filter { (_, pointCount) -> 
+            // Only show trace groups that have data points
+            pointCount > 0 
+        }?.mapIndexed { index, (traceGroup, pointCount) ->
+            val finalColor = colorMap[traceGroup] ?: colors[index % colors.size]
+            val isCustom = !colors.contains(finalColor)
+            
             TraceColorInfo(
                 traceGroup = traceGroup,
-                color = paletteColor,
+                color = finalColor,
                 pointCount = pointCount,
-                isCustom = false
+                isCustom = isCustom
             )
         } ?: emptyList()
     }
@@ -259,7 +255,14 @@ class TraceColorManagementDialog : DialogFragment() {
             listName = traceGroup,
             currentColor = currentColor
         ) { newColor ->
-            // TODO: Save custom trace color to settings
+            // Save custom trace color to curtain settings colorMap
+            val curtainSettings = viewModel.curtainSettings.value
+            if (curtainSettings != null) {
+                val updatedColorMap = curtainSettings.colorMap.toMutableMap()
+                updatedColorMap[traceGroup] = newColor
+                val updatedSettings = curtainSettings.copy(colorMap = updatedColorMap)
+                viewModel.updateCurtainSettings(updatedSettings)
+            }
             updateTraceAssignments()
         }
         colorPicker.show(parentFragmentManager, "TraceColorPicker")
@@ -389,14 +392,11 @@ class TraceAssignmentAdapter(
             // Set color indicator
             try {
                 val colorInt = Color.parseColor(traceInfo.color)
-                binding.colorIndicator.setCardBackgroundColor(colorInt)
+                binding.colorIndicator.setBackgroundColor(colorInt)
             } catch (e: Exception) {
-                binding.colorIndicator.setCardBackgroundColor(Color.GRAY)
+                binding.colorIndicator.setBackgroundColor(Color.GRAY)
             }
 
-            // Show custom indicator
-            binding.customBadge.visibility = if (traceInfo.isCustom) View.VISIBLE else View.GONE
-            binding.customIndicator.visibility = if (traceInfo.isCustom) View.VISIBLE else View.GONE
 
             // Set click listeners
             binding.colorIndicator.setOnClickListener {

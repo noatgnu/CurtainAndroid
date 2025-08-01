@@ -213,10 +213,10 @@ class ColorManagementPaletteAdapter : RecyclerView.Adapter<ColorManagementPalett
         fun bind(color: String) {
             try {
                 val colorInt = android.graphics.Color.parseColor(color)
-                binding.colorCircle.setBackgroundColor(colorInt)
+                binding.colorSquare.setBackgroundColor(colorInt)
             } catch (e: Exception) {
                 // Fallback to transparent
-                binding.colorCircle.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                binding.colorSquare.setBackgroundColor(android.graphics.Color.TRANSPARENT)
             }
         }
     }

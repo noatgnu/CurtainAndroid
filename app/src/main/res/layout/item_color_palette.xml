@@ -2,19 +2,19 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    android:layout_margin="4dp">
+    android:layout_width="24dp"
+    android:layout_height="24dp"
+    android:layout_margin="0dp"
+    android:padding="0dp">
 
     <View
-        android:id="@+id/colorCircle"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="@drawable/circle_background"
+        android:id="@+id/colorSquare"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:clickable="true"
         android:focusable="true"
-        android:foreground="?attr/selectableItemBackgroundBorderless"
-        tools:backgroundTint="#fd7f6f" />
+        android:foreground="?attr/selectableItemBackground"
+        tools:background="#fd7f6f" />
 
     <!-- Selection indicator -->
     <ImageView

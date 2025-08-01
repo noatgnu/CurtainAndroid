@@ -280,8 +280,18 @@ class CurtainDetailsFragment : Fragment() {
     }
     
     private fun showTraceColorsDialog() {
+        // Get trace group counts from volcano plot fragment
+        val volcanoFragment = childFragmentManager.fragments.find { it is VolcanoPlotTabFragment } as? VolcanoPlotTabFragment
+        val traceGroups = volcanoFragment?.getTraceGroupCounts() ?: emptyMap()
+        
         // Show trace color management dialog for volcano plot
-        val dialog = TraceColorManagementDialog.newInstance()
+        val dialog = TraceColorManagementDialog.newInstance(
+            traceGroups = traceGroups,
+            onColorsUpdated = {
+                // Refresh volcano plot when colors are updated
+                volcanoFragment?.refreshVolcanoPlot()
+            }
+        )
         dialog.show(childFragmentManager, "TraceColorsDialog")
     }
     

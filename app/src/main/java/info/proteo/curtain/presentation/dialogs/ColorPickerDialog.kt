@@ -60,11 +60,54 @@ class ColorPickerDialog : DialogFragment() {
         setupViews()
         setupColorPalette()
         setupCustomColorInput()
-        setupButtons()
         
         return MaterialAlertDialogBuilder(requireContext())
             .setView(binding.root)
-            .create()
+            .setPositiveButton("Apply") { _, _ ->
+                if (isValidHexColor(currentColor)) {
+                    onColorSelected?.invoke(currentColor)
+                } else {
+                    binding.customColorInputLayout.error = "Please select a valid color"
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Reset") { _, _ ->
+                // Reset to first default color
+                val defaultColor = defaultColors.first()
+                currentColor = defaultColor
+                updateColorPreview(defaultColor)
+                binding.customColorInput.setText(defaultColor)
+                colorPaletteAdapter.setSelectedColor(defaultColor)
+            }
+            .create().apply {
+                setOnShowListener {
+                    // Set icons for buttons after dialog is shown
+                    getButton(android.app.AlertDialog.BUTTON_POSITIVE)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_check), 
+                            null, null, null
+                        )
+                        contentDescription = "Apply"
+                    }
+                    getButton(android.app.AlertDialog.BUTTON_NEGATIVE)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_close), 
+                            null, null, null
+                        )
+                        contentDescription = "Cancel"
+                    }
+                    getButton(android.app.AlertDialog.BUTTON_NEUTRAL)?.apply {
+                        text = ""
+                        setCompoundDrawablesWithIntrinsicBounds(
+                            androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_refresh), 
+                            null, null, null
+                        )
+                        contentDescription = "Reset"
+                    }
+                }
+            }
     }
     
     private fun setupViews() {
@@ -80,8 +123,26 @@ class ColorPickerDialog : DialogFragment() {
         }
         
         binding.colorPaletteGrid.apply {
-            layoutManager = GridLayoutManager(requireContext(), 5)
+            layoutManager = GridLayoutManager(requireContext(), 8).apply {
+                // Ensure no spacing between grid items
+                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int = 1
+                }
+            }
             adapter = colorPaletteAdapter
+            // Remove all spacing and padding
+            setPadding(0, 0, 0, 0)
+            clipToPadding = false
+            addItemDecoration(object : RecyclerView.ItemDecoration() {
+                override fun getItemOffsets(
+                    outRect: android.graphics.Rect,
+                    view: View,
+                    parent: RecyclerView,
+                    state: RecyclerView.State
+                ) {
+                    outRect.set(0, 0, 0, 0)
+                }
+            })
         }
         
         // Set initial selection
@@ -108,40 +169,17 @@ class ColorPickerDialog : DialogFragment() {
         })
     }
     
-    private fun setupButtons() {
-        binding.cancelButton.setOnClickListener {
-            dismiss()
-        }
-        
-        binding.resetButton.setOnClickListener {
-            // Reset to first default color
-            val defaultColor = defaultColors.first()
-            currentColor = defaultColor
-            updateColorPreview(defaultColor)
-            binding.customColorInput.setText(defaultColor)
-            colorPaletteAdapter.setSelectedColor(defaultColor)
-        }
-        
-        binding.applyButton.setOnClickListener {
-            if (isValidHexColor(currentColor)) {
-                onColorSelected?.invoke(currentColor)
-                dismiss()
-            } else {
-                binding.customColorInputLayout.error = "Please select a valid color"
-            }
-        }
-    }
     
     private fun updateColorPreview(color: String) {
         if (isValidHexColor(color)) {
             try {
                 val colorInt = Color.parseColor(color)
-                binding.currentColorPreview.backgroundTintList = ColorStateList.valueOf(colorInt)
+                binding.currentColorPreview.setBackgroundColor(colorInt)
                 binding.currentColorText.text = color.uppercase()
             } catch (e: Exception) {
                 // Handle invalid color gracefully
-                binding.currentColorPreview.backgroundTintList = 
-                    ContextCompat.getColorStateList(requireContext(), R.color.primary)
+                binding.currentColorPreview.setBackgroundColor(
+                    ContextCompat.getColor(requireContext(), R.color.primary))
                 binding.currentColorText.text = "Invalid"
             }
         }
@@ -207,7 +245,7 @@ class ColorPaletteAdapter(
         fun bind(color: String) {
             try {
                 val colorInt = Color.parseColor(color)
-                binding.colorCircle.backgroundTintList = ColorStateList.valueOf(colorInt)
+                binding.colorSquare.setBackgroundColor(colorInt)
                 
                 // Show selection indicator
                 binding.selectionIndicator.visibility = if (color == selectedColor) {
@@ -216,14 +254,14 @@ class ColorPaletteAdapter(
                     View.GONE
                 }
                 
-                binding.colorCircle.setOnClickListener {
+                binding.colorSquare.setOnClickListener {
                     onColorClick(color)
                 }
                 
             } catch (e: Exception) {
                 // Handle invalid color
-                binding.colorCircle.backgroundTintList = 
-                    ContextCompat.getColorStateList(itemView.context, R.color.primary)
+                binding.colorSquare.setBackgroundColor(
+                    ContextCompat.getColor(itemView.context, R.color.primary))
                 binding.selectionIndicator.visibility = View.GONE
             }
         }

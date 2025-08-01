@@ -160,7 +160,7 @@ object PlotlyChartGenerator {
     ): String {
         val traces = JSONArray()
         val allXValues = mutableListOf<String>()
-        val allYValues = mutableListOf<Double>()
+        val allYValues = mutableListOf<Double?>()
         val allColors = mutableListOf<String>()
         val allHoverText = mutableListOf<String>()
         val allPatterns = mutableListOf<String>()
@@ -182,13 +182,13 @@ object PlotlyChartGenerator {
                 allXValues.add(sample.sampleName)
                 val value = try {
                     when {
-                        sample.value == "N/A" || sample.value.isBlank() -> Double.NaN
-                        sample.value.equals("inf", ignoreCase = true) -> Double.POSITIVE_INFINITY
-                        sample.value.equals("-inf", ignoreCase = true) -> Double.NEGATIVE_INFINITY
-                        else -> sample.value.toDoubleOrNull() ?: Double.NaN
+                        sample.value == "N/A" || sample.value.isBlank() -> null
+                        sample.value.equals("inf", ignoreCase = true) -> null
+                        sample.value.equals("-inf", ignoreCase = true) -> null
+                        else -> sample.value.toDoubleOrNull()
                     }
                 } catch (e: Exception) {
-                    Double.NaN
+                    null
                 }
                 allYValues.add(value)
                 allColors.add(color)

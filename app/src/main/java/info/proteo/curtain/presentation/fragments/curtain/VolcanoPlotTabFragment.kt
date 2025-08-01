@@ -48,6 +48,9 @@ class VolcanoPlotTabFragment : Fragment() {
     
     // Store the color map for trace groups to use in point selection dialogs
     private var currentColorMap: Map<String, String> = emptyMap()
+    
+    // Dictionary to track trace group counts as volcano plot is drawn
+    private var traceGroupCounts: MutableMap<String, Int> = mutableMapOf()
 
 
     override fun onCreateView(
@@ -258,6 +261,9 @@ class VolcanoPlotTabFragment : Fragment() {
         var maxFC = -Double.MAX_VALUE
         var maxLogP = 0.0
 
+        // Clear trace group counts for fresh tracking
+        traceGroupCounts.clear()
+
         // Get color maps and track used colors
         val colorMap = curtainSettings.colorMap.toMutableMap()
         val specialColorMap = mutableMapOf<String, String>()
@@ -409,6 +415,9 @@ class VolcanoPlotTabFragment : Fragment() {
                     if (selected && colorMap.containsKey(selectionName)) {
                         selections.add(selectionName)
                         selectionColors.add(colorMap[selectionName]!!)
+                        
+                        // Track count for user selection trace group
+                        traceGroupCounts[selectionName] = traceGroupCounts.getOrDefault(selectionName, 0) + 1
                     }
                 }
             }
@@ -419,10 +428,16 @@ class VolcanoPlotTabFragment : Fragment() {
                     // Add to Background category
                     selections.add("Background")
                     selectionColors.add("#a4a2a2")  // Gray with opacity
+                    
+                    // Track count for background trace group
+                    traceGroupCounts["Background"] = traceGroupCounts.getOrDefault("Background", 0) + 1
                 } else {
                     // Use significance grouping system
                     val (groupText, position) = getSignificantGroup(fcValue, sigValue, curtainSettings)
                     val group = "$groupText ($comparison)"
+                    
+                    // Track count for trace group
+                    traceGroupCounts[group] = traceGroupCounts.getOrDefault(group, 0) + 1
 
                     // Modified color assignment for significance groups to match JavaScript implementation
                     if (!colorMap.containsKey(group)) {
@@ -685,6 +700,9 @@ class VolcanoPlotTabFragment : Fragment() {
                             if (selected && colorMap.containsKey(selectionName)) {
                                 selections.add(selectionName)
                                 selectionColors.add(colorMap[selectionName]!!)
+                                
+                                // Track count for user selection trace group
+                                traceGroupCounts[selectionName] = traceGroupCounts.getOrDefault(selectionName, 0) + 1
                             }
                         }
                     }
@@ -695,10 +713,16 @@ class VolcanoPlotTabFragment : Fragment() {
                             // Add to Background category
                             selections.add("Background")
                             selectionColors.add("#a4a2a2")  // Gray with opacity
+                            
+                            // Track count for background trace group
+                            traceGroupCounts["Background"] = traceGroupCounts.getOrDefault("Background", 0) + 1
                         } else {
                             // Use significance grouping system
                             val (groupText, position) = getSignificantGroup(fcValue, sigValue, curtainSettings)
                             val group = "$groupText ($comparison)"
+                            
+                            // Track count for trace group
+                            traceGroupCounts[group] = traceGroupCounts.getOrDefault(group, 0) + 1
 
                             // Modified color assignment for significance groups to match JavaScript implementation
                             if (!colorMap.containsKey(group)) {
@@ -2139,6 +2163,13 @@ class VolcanoPlotTabFragment : Fragment() {
      */
     fun disableEditMode() {
         binding.webView.evaluateJavascript("if (typeof disableAnnotationEditing === 'function') { disableAnnotationEditing(); }", null)
+    }
+    
+    /**
+     * Get the current trace group counts from the volcano plot
+     */
+    fun getTraceGroupCounts(): Map<String, Int> {
+        return traceGroupCounts.toMap()
     }
     
     /**

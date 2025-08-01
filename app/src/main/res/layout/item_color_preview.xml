@@ -6,13 +6,13 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="4dp">
+    android:padding="8dp">
 
     <com.google.android.material.card.MaterialCardView
-        android:id="@+id/colorCircle"
+        android:id="@+id/colorSquare"
         android:layout_width="24dp"
         android:layout_height="24dp"
-        app:cardCornerRadius="12dp"
+        app:cardCornerRadius="4dp"
         app:cardElevation="1dp"
         app:cardBackgroundColor="@color/primary"
         tools:cardBackgroundColor="#fd7f6f" />
