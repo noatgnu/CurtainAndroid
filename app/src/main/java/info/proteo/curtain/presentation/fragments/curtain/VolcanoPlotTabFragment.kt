@@ -361,10 +361,8 @@ class VolcanoPlotTabFragment : Fragment() {
         var processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
 
         if (processedData == null) {
-            // Try alternative key names that might contain the differential data
-            processedData = curtainData.dataMap["differential"] as? List<Map<String, Any>>
-                ?: curtainData.dataMap["differentialData"] as? List<Map<String, Any>>
-                ?: curtainData.dataMap["processed"] as? List<Map<String, Any>>
+            // Try the correct key from web frontend
+            processedData = curtainData.dataMap["processed"] as? List<Map<String, Any>>
             
             if (processedData != null) {
                 Log.d("VolcanoPlot", "Using alternative data key, found ${processedData.size} rows")
@@ -374,10 +372,36 @@ class VolcanoPlotTabFragment : Fragment() {
             }
         }
 
+        Log.d("VolcanoPlot", "Processing ${processedData.size} rows for volcano plot")
         for (row in processedData) {
             val comparison = if (comparisonColumn.isNotEmpty()) row[comparisonColumn]?.toString() ?: "" else ""
             val id = row[idColumn]?.toString() ?: ""
-            val gene = if (geneColumn.isNotEmpty()) row[geneColumn]?.toString() ?: id else id
+            
+            if (id.isEmpty()) {
+                Log.w("VolcanoPlot", "Empty ID found, skipping row")
+                continue
+            }
+            // Get gene name following web frontend workflow: UniProt data > gene column > ID
+            var gene = id
+            if (curtainData.fetchUniprot) {
+                try {
+                    val uniprotData = viewModel.uniprotService.getUniprotFromPrimary(id)
+                    val geneNames = uniprotData?.get("Gene Names") as? String
+                    if (!geneNames.isNullOrEmpty()) {
+                        gene = geneNames
+                    }
+                } catch (e: Exception) {
+                    Log.w("VolcanoPlot", "Error getting UniProt data for $id: ${e.message}")
+                }
+            }
+            
+            // Fallback to gene column if no UniProt gene name found
+            if (gene == id && geneColumn.isNotEmpty()) {
+                val geneFromColumn = row[geneColumn]?.toString()
+                if (!geneFromColumn.isNullOrEmpty()) {
+                    gene = geneFromColumn
+                }
+            }
 
             val dataPoint = JSONObject()
 
@@ -475,7 +499,8 @@ class VolcanoPlotTabFragment : Fragment() {
             dataPoint.put("x", fcValue)
             dataPoint.put("y", sigValue)
             dataPoint.put("id", id)
-            dataPoint.put("gene", gene)
+            // Escape gene name to prevent JavaScript issues
+            dataPoint.put("gene", gene.replace("\"", "\\\"").replace("'", "\\'"))
             dataPoint.put("comparison", comparison)
             dataPoint.put("selections", JSONArray(selections))
             dataPoint.put("colors", JSONArray(selectionColors))
@@ -648,10 +673,8 @@ class VolcanoPlotTabFragment : Fragment() {
             var processedData = curtainData.dataMap["processedDifferentialData"] as? List<Map<String, Any>>
 
             if (processedData == null) {
-                // Try alternative key names that might contain the differential data
-                processedData = curtainData.dataMap["differential"] as? List<Map<String, Any>>
-                    ?: curtainData.dataMap["differentialData"] as? List<Map<String, Any>>
-                    ?: curtainData.dataMap["processed"] as? List<Map<String, Any>>
+                // Try the correct key from web frontend
+                processedData = curtainData.dataMap["processed"] as? List<Map<String, Any>>
                 
                 if (processedData != null) {
                     Log.d("VolcanoPlot", "Using alternative data key, found ${processedData.size} rows")
@@ -659,10 +682,36 @@ class VolcanoPlotTabFragment : Fragment() {
             }
 
             if (processedData != null) {
+                Log.d("VolcanoPlot", "Processing ${processedData.size} rows for volcano plot")
                 for (row in processedData) {
                     val comparison = if (comparisonColumn.isNotEmpty()) row[comparisonColumn]?.toString() ?: "" else ""
                     val id = row[idColumn]?.toString() ?: ""
-                    val gene = if (geneColumn.isNotEmpty()) row[geneColumn]?.toString() ?: id else id
+                    
+                    if (id.isEmpty()) {
+                        Log.w("VolcanoPlot", "Empty ID found, skipping row")
+                        continue
+                    }
+                    // Get gene name following web frontend workflow: UniProt data > gene column > ID
+            var gene = id
+            if (curtainData.fetchUniprot) {
+                try {
+                    val uniprotData = viewModel.uniprotService.getUniprotFromPrimary(id)
+                    val geneNames = uniprotData?.get("Gene Names") as? String
+                    if (!geneNames.isNullOrEmpty()) {
+                        gene = geneNames
+                    }
+                } catch (e: Exception) {
+                    Log.w("VolcanoPlot", "Error getting UniProt data for $id: ${e.message}")
+                }
+            }
+            
+            // Fallback to gene column if no UniProt gene name found
+            if (gene == id && geneColumn.isNotEmpty()) {
+                val geneFromColumn = row[geneColumn]?.toString()
+                if (!geneFromColumn.isNullOrEmpty()) {
+                    gene = geneFromColumn
+                }
+            }
 
                     val dataPoint = JSONObject()
 
@@ -760,7 +809,8 @@ class VolcanoPlotTabFragment : Fragment() {
                     dataPoint.put("x", fcValue)
                     dataPoint.put("y", sigValue)
                     dataPoint.put("id", id)
-                    dataPoint.put("gene", gene)
+                    // Escape gene name to prevent JavaScript issues
+                    dataPoint.put("gene", gene.replace("\"", "\\\"").replace("'", "\\'"))
                     dataPoint.put("comparison", comparison)
                     dataPoint.put("selections", JSONArray(selections))
                     dataPoint.put("colors", JSONArray(selectionColors))
@@ -1041,7 +1091,7 @@ class VolcanoPlotTabFragment : Fragment() {
         <div id="plot"></div>
         <div id="touchOverlay"></div>
         <script>
-            const data = JSON.parse('${jsonData}');
+            const data = ${jsonData};
 
             // Group data points by selections for legend
             const selectionGroups = {};
@@ -1711,7 +1761,15 @@ class VolcanoPlotTabFragment : Fragment() {
         
         for (dataPoint in annotatedData) {
             val primaryId = dataPoint[idColumn]?.toString() ?: continue
-            val gene = if (geneColumn.isNotEmpty()) dataPoint[geneColumn]?.toString() ?: primaryId else primaryId
+            // Get gene name from UniProt data if available, fallback to gene column or ID
+            val uniprotData = viewModel.uniprotService.getUniprotFromPrimary(primaryId)
+            val gene = if (uniprotData != null) {
+                uniprotData["Gene Names"] as? String ?: primaryId
+            } else if (geneColumn.isNotEmpty()) {
+                dataPoint[geneColumn]?.toString() ?: primaryId
+            } else {
+                primaryId
+            }
             
             // Create annotation title (same logic as Angular frontend)
             val title = if (gene.isNotEmpty() && gene != primaryId) {
@@ -2052,7 +2110,27 @@ class VolcanoPlotTabFragment : Fragment() {
                 // Skip the selected point itself
                 if (id == selectedPoint.proteinId) continue
                 
-                val gene = if (geneColumn.isNotEmpty()) row[geneColumn]?.toString() ?: id else id
+                // Get gene name following web frontend workflow: UniProt data > gene column > ID
+            var gene = id
+            if (curtainData.fetchUniprot) {
+                try {
+                    val uniprotData = viewModel.uniprotService.getUniprotFromPrimary(id)
+                    val geneNames = uniprotData?.get("Gene Names") as? String
+                    if (!geneNames.isNullOrEmpty()) {
+                        gene = geneNames
+                    }
+                } catch (e: Exception) {
+                    Log.w("VolcanoPlot", "Error getting UniProt data for $id: ${e.message}")
+                }
+            }
+            
+            // Fallback to gene column if no UniProt gene name found
+            if (gene == id && geneColumn.isNotEmpty()) {
+                val geneFromColumn = row[geneColumn]?.toString()
+                if (!geneFromColumn.isNullOrEmpty()) {
+                    gene = geneFromColumn
+                }
+            }
                 val comparison = if (comparisonColumn.isNotEmpty()) row[comparisonColumn]?.toString() ?: "" else ""
                 
                 val fcValue = when (val fc = row[fcColumn]) {
