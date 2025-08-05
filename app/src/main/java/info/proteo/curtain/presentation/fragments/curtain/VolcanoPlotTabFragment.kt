@@ -2167,14 +2167,12 @@ class VolcanoPlotTabFragment : Fragment() {
                     nearbyPoints.add(nearbyPoint)
                 }
                 
-                // Limit to avoid too many nearby points
-                if (nearbyPoints.size >= 10) break
+                // Don't break early - we need to check all points first, then sort by distance
             }
             
-            // Sort by distance to selected point (closest to furthest)
-            val sortedPoints = nearbyPoints.sortedBy { it.distanceTo(selectedPoint) }
-            Log.d("VolcanoPlot", "Found ${sortedPoints.size} nearby points")
-            
+            // Sort by distance to selected point (closest to furthest) and limit to top 10
+            val sortedPoints = nearbyPoints.sortedBy { it.distanceTo(selectedPoint) }.take(10)
+            Log.d("VolcanoPlot", "Found ${nearbyPoints.size} nearby points within radius, returning closest ${sortedPoints.size}")
             
             return sortedPoints
             
