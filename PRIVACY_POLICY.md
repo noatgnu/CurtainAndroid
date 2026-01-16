@@ -66,7 +66,7 @@ QR code scanning uses Google ML Kit Barcode Scanning API. According to Google's 
 
 ## 9. Children's Privacy
 
-This app is designed for scientific researchers and is not intended for children under 13. We do not knowingly collect information from children.
+Curtain is design for exploring publicly available Scientific datasets on their owned locally on the device. Thus we do not send or communicate any information that would allow collect information from children.
 
 ## 10. Your Rights
 
