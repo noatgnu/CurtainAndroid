@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Protein Bar Chart</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: {{BACKGROUND_COLOR}};
+            color: {{TEXT_COLOR}};
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        #plot {
+            width: 100%;
+            height: 100vh;
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 18px;
+            color: {{TEXT_COLOR}};
+            z-index: 1000;
+        }
+
+        #error {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 20px;
+            background-color: rgba(211, 47, 47, 0.1);
+            border: 2px solid #d32f2f;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+
+        #error h3 {
+            color: #d32f2f;
+            margin-bottom: 10px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading bar chart...</p>
+    </div>
+
+    <div id="plot" style="display: none;"></div>
+
+    <div id="error">
+        <h3>Unable to load chart</h3>
+        <p>Please check your data and try again.</p>
+    </div>
+
+    <script src="file:///android_asset/plotly.min.js"></script>
+    {{BAR_CHART_JS}}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof window.BarChart !== 'undefined') {
+                try {
+                    window.BarChart.initialize();
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('plot').style.display = 'block';
+                } catch (error) {
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error').style.display = 'block';
+                    if (window.AndroidBridge) {
+                        window.AndroidBridge.onPlotError('Chart initialization failed: ' + error.message);
+                    }
+                }
+            } else {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                if (window.AndroidBridge) {
+                    window.AndroidBridge.onPlotError('BarChart module not loaded');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

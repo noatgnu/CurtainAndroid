@@ -1,141 +1,171 @@
-import de.undercouch.gradle.tasks.download.Download
+import java.net.URL
+import java.io.InputStream
+import java.io.OutputStream
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("com.google.devtools.ksp") version "2.1.0-1.0.29"
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
-    id("androidx.navigation.safeargs.kotlin")
-    id("de.undercouch.download") version "5.4.0"
-}
-
-hilt {
-    enableAggregatingTask = false
+    alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "info.proteo.curtain"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "info.proteo.curtain"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 36
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
-    buildFeatures {
-        viewBinding = true
-    }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     packaging {
         resources {
-            excludes += listOf(
-                "META-INF/INDEX.LIST",
-                "META-INF/DEPENDENCIES",
-                "META-INF/LICENSE",
-                "META-INF/LICENSE.txt",
-                "META-INF/license.txt",
-                "META-INF/NOTICE",
-                "META-INF/NOTICE.txt",
-                "META-INF/notice.txt",
-                "META-INF/ASL2.0",
-                "META-INF/*.kotlin_module",
-                "git.properties"
-            )
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-
-    sourceSets {
-        getByName("main") {
-            assets.srcDir("src/main/assets")
-        }
-
-    }
 }
-
-tasks.register<Download>("downloadPlotly") {
-    src("https://cdn.plot.ly/plotly-3.0.1.min.js")
-    dest(File(projectDir, "src/main/assets/plotly.min.js"))
-    overwrite(true)
-}
-
-tasks.register<Download>("downloadQRCodeStyling") {
-    src("https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js")
-    dest(File(projectDir, "src/main/assets/qr-code-styling.min.js"))
-    overwrite(true)
-}
-
-tasks.named("preBuild") {
-    dependsOn("downloadPlotly", "downloadQRCodeStyling")
-}
-
 
 dependencies {
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons)
+    implementation(libs.androidx.activity.compose)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
-    implementation(libs.androidx.navigation.fragment.ktx)
-    implementation(libs.androidx.navigation.ui.ktx)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    implementation(libs.moshi)
-    implementation(libs.moshi.kotlin)
-    ksp(libs.moshi.kotlin.codegen)
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
+
+    implementation(libs.androidx.lifecycle.runtime)
+    implementation(libs.androidx.lifecycle.viewmodel)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+    implementation(libs.androidx.navigation.compose)
+
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
-    implementation(libs.moshi)
-    ksp("com.squareup.moshi:moshi-kotlin-codegen:${libs.versions.moshi.get()}")
+
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.moshi)
-    implementation("androidx.fragment:fragment-ktx:1.7.0")
-    implementation("androidx.navigation:navigation-fragment-ktx:2.7.7")
-    implementation("androidx.navigation:navigation-ui-ktx:2.7.7")
-    implementation(libs.androidx.fragment.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.javapoet)
-    implementation("org.jetbrains.kotlinx:dataframe:0.8.1")
-    implementation(libs.androidx.viewpager2)
-    implementation(libs.androidx.preference)
-    
-    // QR Code generation
-    implementation("com.google.zxing:core:3.5.3")
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-    
-    // ML Kit Barcode Scanning
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
-    
-    // CameraX
-    implementation("androidx.camera:camera-core:1.3.1")
-    implementation("androidx.camera:camera-camera2:1.3.1")
-    implementation("androidx.camera:camera-lifecycle:1.3.1")
-    implementation("androidx.camera:camera-view:1.3.1")
+    implementation(libs.gson)
 
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
 
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+
+    implementation(libs.kotlinx.serialization.json)
+
+    implementation(libs.mlkit.barcode)
+    implementation(libs.accompanist.permissions)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+
+    implementation(libs.coil.compose)
+
+    implementation(libs.androidx.datastore)
+
+    implementation(libs.androidx.webkit)
+
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
 }
 
+tasks.register("downloadPlotlyJs") {
+    description = "Downloads Plotly.js library to assets folder"
+    group = "build setup"
+
+    val plotlyVersion = "3.0.1"
+    val plotlyUrl = "https://cdn.plot.ly/plotly-$plotlyVersion.min.js"
+    val assetsDir = file("src/main/assets")
+    val plotlyFile = file("$assetsDir/plotly.min.js")
+
+    outputs.file(plotlyFile)
+
+    doLast {
+        if (!assetsDir.exists()) {
+            assetsDir.mkdirs()
+        }
+
+        if (plotlyFile.exists() && plotlyFile.length() > 1000000) {
+            println("Plotly.js already exists (${plotlyFile.length()} bytes)")
+            val content = plotlyFile.readText(Charsets.UTF_8)
+            if (content.contains("Plotly", ignoreCase = true)) {
+                println("Plotly.js appears to be valid")
+                return@doLast
+            } else {
+                println("Existing plotly.min.js appears to be invalid, redownloading...")
+            }
+        }
+
+        println("Downloading Plotly.js v$plotlyVersion...")
+        try {
+            val url = URL(plotlyUrl)
+            url.openStream().use { input: InputStream ->
+                plotlyFile.outputStream().use { output: OutputStream ->
+                    input.copyTo(output)
+                }
+            }
+            println("Successfully downloaded Plotly.js (${plotlyFile.length()} bytes)")
+
+            val content = plotlyFile.readText(Charsets.UTF_8)
+            if (content.contains("Plotly", ignoreCase = true)) {
+                println("Plotly.js validation successful")
+            } else {
+                println("Downloaded file may not be valid Plotly.js")
+            }
+        } catch (e: Exception) {
+            println("Failed to download Plotly.js: ${e.message}")
+            throw e
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn("downloadPlotlyJs")
+}

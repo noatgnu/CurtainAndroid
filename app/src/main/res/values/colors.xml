@@ -1,55 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Bootstrap-compatible brand colors -->
-    <color name="primary">#FF2E2D62</color>
-    <color name="primary_variant">#FF1F1E45</color>
-    <color name="primary_container">#FF8294C4</color>
-    <color name="secondary">#FFA4A4A4</color>
-    <color name="success">#FF003632</color>
-    <color name="info">#FF8294C4</color>
-    <color name="warning">#FFFFD6A5</color>
-    <color name="danger">#FFFF9B9B</color>
-    
-    <!-- Gray scale (Bootstrap $gray-100 and $gray-900) -->
-    <color name="light">#FFF8F9FA</color>
-    <color name="dark">#FF212529</color>
-    
-    <!-- Basic colors -->
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    
-    <!-- Surface colors for light mode -->
-    <color name="surface_light">#FFFFFFFF</color>
-    <color name="surface_variant_light">#FFF8F9FA</color>
-    <color name="on_surface_light">#FF212529</color>
-    <color name="on_surface_variant_light">#FF6C757D</color>
-    
-    <!-- Surface colors (default light mode values) -->
-    <color name="surface_dark">#FFFFFFFF</color>
-    <color name="surface_variant_dark">#FFF8F9FA</color>
-    <color name="on_surface_dark">#FF212529</color>
-    <color name="on_surface_variant_dark">#FF6C757D</color>
-    
-    <!-- Legacy purple colors (keeping for compatibility) -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
     <color name="teal_200">#FF03DAC5</color>
     <color name="teal_700">#FF018786</color>
-    
-    <!-- Overlay colors -->
-    <color name="overlay_background">#80000000</color>
-    
-    <!-- Chip colors -->
-    <color name="chip_background">#FFE0E0E0</color>
-    
-    <!-- Text colors for better readability -->
-    <color name="text_primary_light">#FF212529</color>
-    <color name="text_secondary_light">#FF495057</color>
-    <color name="text_body_light">#FF343A40</color>
-    
-    <!-- Text colors (default light mode values) -->
-    <color name="text_primary_dark">#FF212529</color>
-    <color name="text_secondary_dark">#FF495057</color>
-    <color name="text_body_dark">#FF343A40</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
 </resources>

@@ -1,90 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
+        android:name=".CurtainApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:name=".application.CurtainApplication"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Curtain"
-        tools:targetApi="31">
+        android:theme="@style/Theme.CurtainAndroid">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Curtain">
+            android:theme="@style/Theme.CurtainAndroid">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Custom scheme handling for curtain:// URLs -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="curtain"
-                    android:host="open" />
-            </intent-filter>
-
-            <!-- Intent URL format handling for intent:// links -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="intent" />
-            </intent-filter>
-
-            <!-- Web URLs handling with autoVerify (App Links) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Support for standard http/https links -->
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <!-- You must specify at least one host for http/https schemes -->
-                <data android:host="curtain.proteo.info" /> <!-- Replace with your actual domain -->
-                <!-- Optional path pattern if you only want to match certain paths -->
-                <data android:pathPattern="/curtain/open.*" />
+                <data android:scheme="curtain" android:host="open" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="curtain.proteo.info" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".presentation.activities.DataFilterListActivity"
-            android:exported="true"
-            android:theme="@style/Theme.Curtain" />
-            
-        <activity
-            android:name=".presentation.activities.QRCodeShareActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Curtain"
-            android:parentActivityName=".MainActivity" />
-            
-        <activity
-            android:name=".presentation.activities.QRScannerActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Curtain"
-            android:parentActivityName=".MainActivity"
-            android:screenOrientation="portrait" />
-
-        <!-- FileProvider for sharing QR codes -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
     </application>
 
 </manifest>
