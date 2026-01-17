@@ -28,12 +28,27 @@ if (typeof Plotly === 'undefined') {
                 document.getElementById('error').style.display = 'none';
                 document.getElementById('plot').style.display = 'block';
 
+                const plotDiv = document.getElementById('plot');
+                const containerWidth = plotDiv.offsetWidth || window.innerWidth;
+                const containerHeight = plotDiv.offsetHeight || window.innerHeight;
+
+                plotData.layout.width = containerWidth;
+                plotData.layout.height = containerHeight;
+
                 Plotly.newPlot('plot', plotData.data, plotData.layout, plotData.config)
                     .then(() => {
                         currentPlot = document.getElementById('plot');
                         this.initializeAnnotationMap();
                         this.setupEventHandlers();
-                        this.notifyReady();
+
+                        setTimeout(() => {
+                            this.resizePlot();
+                            this.notifyReady();
+                        }, 100);
+
+                        window.addEventListener('resize', () => {
+                            this.resizePlot();
+                        });
                     })
                     .catch(error => {
                         this.showError('Failed to create volcano plot: ' + error.message);
@@ -324,6 +339,19 @@ if (typeof Plotly === 'undefined') {
         },
 
         enableAnnotationEditing: function() {
+        },
+
+        resizePlot: function() {
+            if (!currentPlot) return;
+
+            const plotDiv = document.getElementById('plot');
+            const containerWidth = plotDiv.offsetWidth || window.innerWidth;
+            const containerHeight = plotDiv.offsetHeight || window.innerHeight;
+
+            Plotly.relayout(currentPlot, {
+                width: containerWidth,
+                height: containerHeight
+            });
         },
 
         updatePlot: function(newData) {

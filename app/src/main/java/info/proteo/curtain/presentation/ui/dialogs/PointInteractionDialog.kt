@@ -556,18 +556,32 @@ private fun ProteinSelectionRow(
             )
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        proteinDisplayName(protein),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (isClickedProtein) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                    if (isClickedProtein) {
-                        Spacer(modifier = Modifier.width(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "(Clicked)",
+                            proteinDisplayName(protein),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isClickedProtein) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                        if (isClickedProtein) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "(Clicked)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    nearbyProtein?.let {
+                        Text(
+                            "Δ ${String.format("%.2f", it.distance)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = Color(0xFFFF9800),
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -583,13 +597,6 @@ private fun ProteinSelectionRow(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    nearbyProtein?.let {
-                        Text(
-                            "dist: ${String.format("%.3f", it.distance)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFFF9800)
-                        )
-                    }
                 }
             }
 
@@ -638,18 +645,32 @@ private fun ProteinAnnotationRow(
             )
 
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        proteinDisplayName(protein),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (isClickedProtein) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                    if (isClickedProtein) {
-                        Spacer(modifier = Modifier.width(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "(Clicked)",
+                            proteinDisplayName(protein),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isClickedProtein) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                        if (isClickedProtein) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "(Clicked)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    nearbyProtein?.let {
+                        Text(
+                            "Δ ${String.format("%.2f", it.distance)}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = Color(0xFFFF9800),
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
@@ -665,13 +686,6 @@ private fun ProteinAnnotationRow(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    nearbyProtein?.let {
-                        Text(
-                            "dist: ${String.format("%.3f", it.distance)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFFF9800)
-                        )
-                    }
                 }
 
                 Text(

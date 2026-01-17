@@ -498,6 +498,10 @@ class CurtainDetailsViewModel @Inject constructor(
         updateSettings(updatedSettings)
     }
 
+    fun generateVolcanoPlotPublic() {
+        _curtainData.value?.let { generateVolcanoPlot(it) }
+    }
+
     private fun generateVolcanoPlot(curtainData: CurtainData) {
         viewModelScope.launch(Dispatchers.Default) {
             try {

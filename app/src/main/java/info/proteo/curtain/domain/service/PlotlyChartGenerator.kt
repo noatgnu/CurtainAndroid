@@ -296,6 +296,8 @@ class PlotlyChartGenerator @Inject constructor(
                 "showgrid" to (settings.volcanoPlotGrid["y"] ?: true),
                 "automargin" to true
             ),
+            "autosize" to true,
+            "useResizeHandler" to true,
             "hovermode" to "closest",
             "showlegend" to true,
             "plot_bgcolor" to "rgba(0,0,0,0)",

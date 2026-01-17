@@ -34,6 +34,17 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -100,159 +111,158 @@ fun CurtainListScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Curtain Datasets") },
-                actions = {
-                    IconButton(onClick = { showThemeSettings = true }) {
-                        Icon(Icons.Default.Palette, contentDescription = "Theme Settings")
+            topBar = {
+                TopAppBar(
+                    title = { Text("Curtain Datasets") },
+                    actions = {
+                        IconButton(onClick = { showThemeSettings = true }) {
+                            Icon(Icons.Default.Palette, contentDescription = "Theme Settings")
+                        }
+                    },
+                )
+            },
+            floatingActionButton = {
+                Box {
+                    FloatingActionButton(
+                        onClick = { showAddMenu = true }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Dataset")
+                    }
+                    DropdownMenu(
+                        expanded = showAddMenu,
+                        onDismissRequest = { showAddMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Scan QR Code") },
+                            onClick = {
+                                showAddMenu = false
+                                navController.navigate("qr_scanner")
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.QrCodeScanner, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Manual Entry") },
+                            onClick = {
+                                showAddMenu = false
+                                showAddCurtainDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Edit, contentDescription = null)
+                            }
+                        )
                     }
                 }
-            )
-        },
-        floatingActionButton = {
-            Box {
-                FloatingActionButton(
-                    onClick = { showAddMenu = true }
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Dataset")
-                }
-                androidx.compose.material3.DropdownMenu(
-                    expanded = showAddMenu,
-                    onDismissRequest = { showAddMenu = false }
-                ) {
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("Scan QR Code") },
-                        onClick = {
-                            showAddMenu = false
-                            navController.navigate("qr_scanner")
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.QrCodeScanner, contentDescription = null)
-                        }
-                    )
-                    androidx.compose.material3.DropdownMenuItem(
-                        text = { Text("Manual Entry") },
-                        onClick = {
-                            showAddMenu = false
-                            showAddCurtainDialog = true
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Edit, contentDescription = null)
-                        }
-                    )
-                }
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            TextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) } // Removed hostState =
+        ) { paddingValues ->
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text("Search datasets...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                singleLine = true
-            )
-
-            when {
-                isLoading && curtains.isEmpty() -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    placeholder = { Text("Search datasets...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    singleLine = true
+                )
+    
+                when {
+                    isLoading && curtains.isEmpty() -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
                     }
-                }
-
-                curtains.isEmpty() -> {
-                    EmptyState(
-                        onLoadExample = { viewModel.loadExampleCurtain() }
-                    )
-                }
-
-                else -> {
-                    LazyColumn(
+    
+                    curtains.isEmpty() -> {
+                        EmptyState(
+                            onLoadExample = { viewModel.loadExampleCurtain() }
+                        )
+                    }
+    
+                    else -> {
+                        LazyColumn(
                         modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(curtains, key = { it.linkId }) { curtain ->
-                            CurtainItem(
-                                curtain = curtain,
-                                downloadProgress = downloadProgress[curtain.linkId],
-                                onDownload = { viewModel.downloadCurtain(curtain) },
-                                onTogglePin = { viewModel.togglePin(curtain) },
-                                onEdit = {
-                                    curtainToEdit = curtain
-                                    showEditDialog = true
-                                },
-                                onRedownload = { viewModel.downloadCurtain(curtain) },
-                                onDelete = {
-                                    curtainToDelete = curtain
-                                    showDeleteDialog = true
-                                },
-                                onClick = {
-                                    if (curtain.file != null) {
-                                        navController.navigate("curtain_details/${curtain.linkId}")
+                        ) {
+                            items(curtains, key = { it.linkId }) { curtain ->
+                                CurtainItem(
+                                    curtain = curtain,
+                                    downloadProgress = downloadProgress[curtain.linkId],
+                                    onDownload = { viewModel.downloadCurtain(curtain) },
+                                    onTogglePin = { viewModel.togglePin(curtain) },
+                                    onEdit = {
+                                        curtainToEdit = curtain
+                                        showEditDialog = true
+                                    },
+                                    onRedownload = { viewModel.downloadCurtain(curtain) },
+                                    onDelete = {
+                                        curtainToDelete = curtain
+                                        showDeleteDialog = true
+                                    },
+                                    onClick = {
+                                        if (curtain.file != null) {
+                                            navController.navigate("curtain_details/${curtain.linkId}")
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    
+        if (showEditDialog && curtainToEdit != null) {
+            EditDescriptionDialog(
+                currentDescription = curtainToEdit!!.dataDescription,
+                onDismiss = { showEditDialog = false },
+                onSave = { newDescription ->
+                    viewModel.updateDescription(curtainToEdit!!.linkId, newDescription)
+                    showEditDialog = false
+                }
+            )
+        }
+    
+        if (showDeleteDialog && curtainToDelete != null) {
+            DeleteConfirmationDialog(
+                curtainDescription = curtainToDelete!!.dataDescription,
+                onDismiss = { showDeleteDialog = false },
+                onConfirm = {
+                    viewModel.deleteCurtain(curtainToDelete!!)
+                    showDeleteDialog = false
+                }
+            )
+        }
+    
+        if (showAddCurtainDialog) {
+            AddCurtainDialog(
+                onDismiss = { showAddCurtainDialog = false },
+                onAdd = { linkId, apiUrl, frontendUrl, description ->
+                    viewModel.loadCurtain(
+                        linkId = linkId,
+                        apiUrl = apiUrl,
+                        frontendUrl = frontendUrl
+                    )
+                    showAddCurtainDialog = false
+                }
+            )
+        }
+    
+        if (showThemeSettings) {
+            info.proteo.curtain.presentation.ui.settings.ThemeSettingsScreen(
+                onDismiss = { showThemeSettings = false }
+            )
+        }
     }
-
-    if (showEditDialog && curtainToEdit != null) {
-        EditDescriptionDialog(
-            currentDescription = curtainToEdit!!.dataDescription,
-            onDismiss = { showEditDialog = false },
-            onSave = { newDescription ->
-                viewModel.updateDescription(curtainToEdit!!.linkId, newDescription)
-                showEditDialog = false
-            }
-        )
-    }
-
-    if (showDeleteDialog && curtainToDelete != null) {
-        DeleteConfirmationDialog(
-            curtainDescription = curtainToDelete!!.dataDescription,
-            onDismiss = { showDeleteDialog = false },
-            onConfirm = {
-                viewModel.deleteCurtain(curtainToDelete!!)
-                showDeleteDialog = false
-            }
-        )
-    }
-
-    if (showAddCurtainDialog) {
-        AddCurtainDialog(
-            onDismiss = { showAddCurtainDialog = false },
-            onAdd = { linkId, apiUrl, frontendUrl, description ->
-                viewModel.loadCurtain(
-                    linkId = linkId,
-                    apiUrl = apiUrl,
-                    frontendUrl = frontendUrl
-                )
-                showAddCurtainDialog = false
-            }
-        )
-    }
-
-    if (showThemeSettings) {
-        info.proteo.curtain.presentation.ui.settings.ThemeSettingsScreen(
-            onDismiss = { showThemeSettings = false }
-        )
-    }
-}
-
 /**
  * Single curtain item in the list.
  *
@@ -348,11 +358,11 @@ private fun CurtainItem(
                             IconButton(onClick = { showMenu = true }) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "More")
                             }
-                            androidx.compose.material3.DropdownMenu(
+                            DropdownMenu(
                                 expanded = showMenu,
                                 onDismissRequest = { showMenu = false }
                             ) {
-                                androidx.compose.material3.DropdownMenuItem(
+                                DropdownMenuItem(
                                     text = { Text("Edit Description") },
                                     onClick = {
                                         onEdit()
@@ -362,7 +372,7 @@ private fun CurtainItem(
                                         Icon(Icons.Default.Edit, contentDescription = null)
                                     }
                                 )
-                                androidx.compose.material3.DropdownMenuItem(
+                                DropdownMenuItem(
                                     text = { Text(if (curtain.isPinned) "Unpin" else "Pin") },
                                     onClick = {
                                         onTogglePin()
@@ -372,7 +382,7 @@ private fun CurtainItem(
                                         Icon(Icons.Default.PushPin, contentDescription = null)
                                     }
                                 )
-                                androidx.compose.material3.DropdownMenuItem(
+                                DropdownMenuItem(
                                     text = { Text("Redownload") },
                                     onClick = {
                                         onRedownload()
@@ -382,8 +392,8 @@ private fun CurtainItem(
                                         Icon(Icons.Default.Download, contentDescription = null)
                                     }
                                 )
-                                androidx.compose.material3.HorizontalDivider()
-                                androidx.compose.material3.DropdownMenuItem(
+                                HorizontalDivider()
+                                DropdownMenuItem(
                                     text = { Text("Delete") },
                                     onClick = {
                                         onDelete()
@@ -396,7 +406,7 @@ private fun CurtainItem(
                                             tint = MaterialTheme.colorScheme.error
                                         )
                                     },
-                                    colors = androidx.compose.material3.MenuDefaults.itemColors(
+                                    colors = MenuDefaults.itemColors(
                                         textColor = MaterialTheme.colorScheme.error
                                     )
                                 )
@@ -442,7 +452,7 @@ private fun CurtainItem(
  * @param onLoadExample Load example dataset callback
  */
 @Composable
-private fun EmptyState(onLoadExample: () -> Unit) {
+internal fun EmptyState(onLoadExample: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -463,7 +473,7 @@ private fun EmptyState(onLoadExample: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            androidx.compose.material3.Button(
+            Button(
                 onClick = onLoadExample,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -487,18 +497,18 @@ private fun formatDate(timestamp: Long): String {
 }
 
 @Composable
-private fun EditDescriptionDialog(
+internal fun EditDescriptionDialog(
     currentDescription: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
 ) {
     var description by remember { mutableStateOf(currentDescription) }
 
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit Description") },
         text = {
-            androidx.compose.material3.OutlinedTextField(
+            OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Description") },
@@ -508,7 +518,7 @@ private fun EditDescriptionDialog(
             )
         },
         confirmButton = {
-            androidx.compose.material3.TextButton(
+            TextButton(
                 onClick = { onSave(description) },
                 enabled = description.isNotBlank()
             ) {
@@ -516,7 +526,7 @@ private fun EditDescriptionDialog(
             }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
         }
@@ -524,12 +534,12 @@ private fun EditDescriptionDialog(
 }
 
 @Composable
-private fun DeleteConfirmationDialog(
+internal fun DeleteConfirmationDialog(
     curtainDescription: String,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
-    androidx.compose.material3.AlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
@@ -546,9 +556,9 @@ private fun DeleteConfirmationDialog(
             )
         },
         confirmButton = {
-            androidx.compose.material3.TextButton(
+            TextButton(
                 onClick = onConfirm,
-                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                colors = ButtonDefaults.textButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) {
@@ -556,7 +566,7 @@ private fun DeleteConfirmationDialog(
             }
         },
         dismissButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
         }

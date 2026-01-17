@@ -71,6 +71,7 @@ fun CurtainNavGraph(
         composable("qr_scanner") {
             QRScannerScreen(
                 navController = navController,
+                deepLinkHandler = deepLinkHandler,
                 onQRCodeScanned = { qrContent ->
                     scope.launch {
                         val result = deepLinkHandler.handleQRCode(qrContent)
@@ -90,7 +91,7 @@ fun CurtainNavGraph(
                                     popUpTo("main") { inclusive = false }
                                 }
                             }
-                            null -> {
+                            else -> {
 
                             }
                         }

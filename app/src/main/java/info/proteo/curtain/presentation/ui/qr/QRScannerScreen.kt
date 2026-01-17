@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -27,17 +28,24 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import info.proteo.curtain.domain.service.DeepLinkHandler
+import info.proteo.curtain.domain.service.DeepLinkResult
+import info.proteo.curtain.presentation.viewmodel.CurtainViewModel
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun QRScannerScreen(
     navController: NavController,
-    onQRCodeScanned: (String) -> Unit
+    onQRCodeScanned: (String) -> Unit,
+    deepLinkHandler: DeepLinkHandler? = null,
+    curtainViewModel: CurtainViewModel = hiltViewModel()
 ) {
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     var flashEnabled by remember { mutableStateOf(false) }
     var scannedCode by remember { mutableStateOf<String?>(null) }
+    var showAddDialog by remember { mutableStateOf(false) }
+    var parsedData by remember { mutableStateOf<DeepLinkResult.ParsedQRData?>(null) }
 
     Scaffold(
         topBar = {
@@ -73,11 +81,19 @@ fun QRScannerScreen(
                 scannedCode != null -> {
                     QRCodeResult(
                         code = scannedCode!!,
+                        parsedLinkId = parsedData?.linkId,
                         onUseCode = {
-                            onQRCodeScanned(scannedCode!!)
-                            navController.navigateUp()
+                            if (parsedData != null) {
+                                showAddDialog = true
+                            } else {
+                                onQRCodeScanned(scannedCode!!)
+                                navController.navigateUp()
+                            }
                         },
-                        onScanAgain = { scannedCode = null }
+                        onScanAgain = {
+                            scannedCode = null
+                            parsedData = null
+                        }
                     )
                 }
                 else -> {
@@ -85,11 +101,34 @@ fun QRScannerScreen(
                         flashEnabled = flashEnabled,
                         onQRCodeDetected = { code ->
                             scannedCode = code
+                            parsedData = deepLinkHandler?.parseQRCodeForDialog(code)
                         }
                     )
                 }
             }
         }
+    }
+
+    if (showAddDialog && parsedData != null) {
+        QRAddCurtainDialog(
+            linkId = parsedData!!.linkId,
+            apiUrl = parsedData!!.apiURL ?: "https://api.curtain.proteo.info",
+            frontendUrl = parsedData!!.frontendURL ?: "",
+            onDismiss = {
+                showAddDialog = false
+                scannedCode = null
+                parsedData = null
+            },
+            onAdd = { linkId, apiUrl, frontendUrl ->
+                curtainViewModel.loadCurtain(
+                    linkId = linkId,
+                    apiUrl = apiUrl,
+                    frontendUrl = frontendUrl
+                )
+                showAddDialog = false
+                navController.navigateUp()
+            }
+        )
     }
 }
 
@@ -206,6 +245,7 @@ private fun CameraPreview(
 @Composable
 private fun QRCodeResult(
     code: String,
+    parsedLinkId: String?,
     onUseCode: () -> Unit,
     onScanAgain: () -> Unit
 ) {
@@ -223,14 +263,36 @@ private fun QRCodeResult(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                code,
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium
-            )
+        if (parsedLinkId != null) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        "Detected Link ID:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        parsedLinkId,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    code,
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -239,7 +301,7 @@ private fun QRCodeResult(
             onClick = onUseCode,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Use This Code")
+            Text(if (parsedLinkId != null) "Add Dataset" else "Use This Code")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -251,6 +313,71 @@ private fun QRCodeResult(
             Text("Scan Again")
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QRAddCurtainDialog(
+    linkId: String,
+    apiUrl: String,
+    frontendUrl: String,
+    onDismiss: () -> Unit,
+    onAdd: (linkId: String, apiUrl: String, frontendUrl: String) -> Unit
+) {
+    var editedLinkId by remember { mutableStateOf(linkId) }
+    var editedApiUrl by remember { mutableStateOf(apiUrl) }
+    var editedFrontendUrl by remember { mutableStateOf(frontendUrl) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Dataset from QR Code") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = editedLinkId,
+                    onValueChange = { editedLinkId = it },
+                    label = { Text("Link ID") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = editedApiUrl,
+                    onValueChange = { editedApiUrl = it },
+                    label = { Text("API URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = editedFrontendUrl,
+                    onValueChange = { editedFrontendUrl = it },
+                    label = { Text("Frontend URL (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (editedLinkId.isNotBlank() && editedApiUrl.isNotBlank()) {
+                        onAdd(editedLinkId.trim(), editedApiUrl.trim(), editedFrontendUrl.trim())
+                    }
+                },
+                enabled = editedLinkId.isNotBlank() && editedApiUrl.isNotBlank()
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private class QRCodeAnalyzer(

@@ -293,7 +293,7 @@ fun CurtainDetailsScreen(
                                     leadingIcon = { Icon(Icons.Default.DonutSmall, null) }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Condition Bracket") },
+                                    text = { Text("Bar Chart Settings") },
                                     onClick = {
                                         navController.navigate("bar_chart_bracket/$linkId")
                                         showMenu = false
@@ -551,7 +551,7 @@ fun CurtainDetailsScreen(
 }
 
 @Composable
-private fun OverviewTab(curtainData: CurtainData, proteinCount: Int) {
+internal fun OverviewTab(curtainData: CurtainData, proteinCount: Int) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -967,7 +967,7 @@ private fun VolcanoPlotTab(
 }
 
 @Composable
-private fun VolcanoPlotView(
+internal fun VolcanoPlotView(
     htmlContent: String,
     onPlotReady: () -> Unit,
     onPlotError: (String) -> Unit,
@@ -1057,7 +1057,7 @@ private fun VolcanoPlotView(
 }
 
 @Composable
-private fun ProteinListTabNew(
+internal fun ProteinListTabNew(
     curtainData: CurtainData,
     linkId: String,
     navController: NavController,
@@ -1066,6 +1066,10 @@ private fun ProteinListTabNew(
     val proteins by proteinDetailsViewModel.proteins.collectAsState()
     val selectionGroups by proteinDetailsViewModel.selectionGroups.collectAsState()
     val searchQuery by proteinDetailsViewModel.searchQuery.collectAsState()
+
+    LaunchedEffect(linkId) {
+        proteinDetailsViewModel.setLinkId(linkId)
+    }
 
     LaunchedEffect(curtainData) {
         proteinDetailsViewModel.setCurtainData(curtainData)
@@ -1184,7 +1188,7 @@ private fun ProteinListTab(curtainData: CurtainData) {
 }
 
 @Composable
-private fun SettingsTab(curtainData: CurtainData, navController: NavController) {
+internal fun SettingsTab(curtainData: CurtainData, navController: NavController) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()

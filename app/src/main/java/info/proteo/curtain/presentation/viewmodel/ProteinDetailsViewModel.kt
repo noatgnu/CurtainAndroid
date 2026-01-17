@@ -22,7 +22,8 @@ class ProteinDetailsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val curtainLinkId: String = checkNotNull(savedStateHandle["linkId"])
+    private val _curtainLinkId = MutableStateFlow(savedStateHandle.get<String>("linkId") ?: "")
+    val curtainLinkId: StateFlow<String> = _curtainLinkId.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -30,13 +31,14 @@ class ProteinDetailsViewModel @Inject constructor(
     private val _curtainData = MutableStateFlow<CurtainData?>(null)
     val curtainData: StateFlow<CurtainData?> = _curtainData.asStateFlow()
 
-    val selectionGroups: StateFlow<List<SelectionGroup>> = selectionGroupRepository
-        .getSelectionGroupsByCurtainId(curtainLinkId)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    private val _selectionGroups = MutableStateFlow<List<SelectionGroup>>(emptyList())
+    val selectionGroups: StateFlow<List<SelectionGroup>> = _selectionGroups.asStateFlow()
+
+    fun setLinkId(linkId: String) {
+        if (_curtainLinkId.value != linkId) {
+            _curtainLinkId.value = linkId
+        }
+    }
 
     val proteins: StateFlow<List<ProteinInfo>> = combine(
         _curtainData,
@@ -67,6 +69,34 @@ class ProteinDetailsViewModel @Inject constructor(
 
     fun setCurtainData(data: CurtainData) {
         _curtainData.value = data
+        _selectionGroups.value = extractSelectionGroupsFromCurtainData(data)
+    }
+
+    private fun extractSelectionGroupsFromCurtainData(data: CurtainData): List<SelectionGroup> {
+        val selectionsName = data.selectionsName ?: return emptyList()
+        val colorMap = data.settings.colorMap
+        val selectedMap = data.selectedMap ?: return emptyList()
+        val defaultColors = data.settings.defaultColorList
+
+        return selectionsName.mapIndexed { index, groupName ->
+            val color = colorMap[groupName]
+                ?: defaultColors.getOrElse(index % defaultColors.size) { "#808080" }
+
+            val proteinsInGroup = selectedMap.filterValues { selections ->
+                selections[groupName] == true
+            }.keys.toList()
+
+            SelectionGroup(
+                id = groupName,
+                curtainLinkId = data.linkId,
+                name = groupName,
+                color = color,
+                proteins = proteinsInGroup,
+                isActive = true,
+                createdAt = System.currentTimeMillis(),
+                modifiedAt = System.currentTimeMillis()
+            )
+        }
     }
 
     fun addProteinToGroup(proteinId: String, groupId: String) {
@@ -83,12 +113,15 @@ class ProteinDetailsViewModel @Inject constructor(
 
     fun createSelectionGroup(name: String, color: String, proteins: List<String> = emptyList()) {
         viewModelScope.launch {
-            selectionGroupRepository.createSelectionGroup(
-                curtainLinkId = curtainLinkId,
-                name = name,
-                color = color,
-                proteins = proteins
-            )
+            val linkId = _curtainLinkId.value
+            if (linkId.isNotEmpty()) {
+                selectionGroupRepository.createSelectionGroup(
+                    curtainLinkId = linkId,
+                    name = name,
+                    color = color,
+                    proteins = proteins
+                )
+            }
         }
     }
 

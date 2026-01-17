@@ -31,11 +31,14 @@ fun BarChartConditionBracketScreen(
 
     var enabled by remember { mutableStateOf(currentData.settings.barChartConditionBracket.showBracket) }
     var bracketColorHex by remember { mutableStateOf("#000000") }
+    var viewPeptideCount by remember { mutableStateOf(currentData.settings.viewPeptideCount) }
+
+    val hasPeptideData = currentData.settings.peptideCountData.isNotEmpty()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Condition Bracket") },
+                title = { Text("Bar Chart Settings") },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -46,7 +49,10 @@ fun BarChartConditionBracketScreen(
                         val updatedBracket = currentData.settings.barChartConditionBracket.copy(
                             showBracket = enabled
                         )
-                        val updatedSettings = currentData.settings.copy(barChartConditionBracket = updatedBracket)
+                        val updatedSettings = currentData.settings.copy(
+                            barChartConditionBracket = updatedBracket,
+                            viewPeptideCount = viewPeptideCount
+                        )
                         viewModel.updateSettings(updatedSettings)
                         navController.navigateUp()
                     }) {
@@ -64,6 +70,65 @@ fun BarChartConditionBracketScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Card {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Show Peptide Count", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Display peptide counts below bar charts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = viewPeptideCount,
+                            onCheckedChange = { viewPeptideCount = it },
+                            enabled = hasPeptideData
+                        )
+                    }
+
+                    if (!hasPeptideData) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Text(
+                                    "No peptide count data available. Upload peptide count data in the web app to enable this feature.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    } else if (viewPeptideCount) {
+                        Text(
+                            "Peptide counts will appear as a heatmap below bar charts with count annotations",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
             Card {
                 Column(
                     modifier = Modifier.padding(16.dp),

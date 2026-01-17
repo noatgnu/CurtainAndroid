@@ -53,9 +53,12 @@ class MainActivity : ComponentActivity() {
                 deepLinkResult?.let { result ->
                     when (result) {
                         is DeepLinkResult.CurtainDataset -> {
-                            navController.navigate("curtain_details/${result.linkId}")
+                            // navController.navigate("curtain_details/${result.linkId}")
                         }
                         is DeepLinkResult.DOIReference -> {
+
+                        }
+                        is DeepLinkResult.ParsedQRData -> {
 
                         }
                     }
