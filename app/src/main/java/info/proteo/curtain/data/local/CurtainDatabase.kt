@@ -2,12 +2,16 @@ package info.proteo.curtain.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import info.proteo.curtain.data.local.dao.CurtainCollectionDao
 import info.proteo.curtain.data.local.dao.CurtainDao
 import info.proteo.curtain.data.local.dao.DataFilterListDao
 import info.proteo.curtain.data.local.dao.ProteinSearchListDao
 import info.proteo.curtain.data.local.dao.SelectionGroupDao
 import info.proteo.curtain.data.local.dao.SettingsVariantDao
 import info.proteo.curtain.data.local.dao.SiteSettingsDao
+import info.proteo.curtain.data.local.entity.CollectionSessionCrossRef
+import info.proteo.curtain.data.local.entity.CollectionSessionEntity
+import info.proteo.curtain.data.local.entity.CurtainCollectionEntity
 import info.proteo.curtain.data.local.entity.CurtainEntity
 import info.proteo.curtain.data.local.entity.CurtainSiteSettingsEntity
 import info.proteo.curtain.data.local.entity.DataFilterListEntity
@@ -33,6 +37,14 @@ import info.proteo.curtain.data.local.entity.SettingsVariantEntity
  * Version 4: Added settings variants support:
  * - SettingsVariantEntity: Save and load analysis configuration presets
  *
+ * Version 5: Added collection support:
+ * - CurtainCollectionEntity: Collection metadata
+ * - CollectionSessionEntity: Sessions within a collection
+ *
+ * Version 6: Many-to-many collections:
+ * - CollectionSessionCrossRef: Junction table for collection-session relationships
+ * - CollectionSessionEntity now uses linkId as primary key (shared across collections)
+ *
  * Schema export is enabled for version control and migrations.
  * Schema location is configured in app/build.gradle.kts (ksp.arg).
  */
@@ -43,9 +55,12 @@ import info.proteo.curtain.data.local.entity.SettingsVariantEntity
         DataFilterListEntity::class,
         SelectionGroupEntity::class,
         ProteinSearchListEntity::class,
-        SettingsVariantEntity::class
+        SettingsVariantEntity::class,
+        CurtainCollectionEntity::class,
+        CollectionSessionEntity::class,
+        CollectionSessionCrossRef::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = true
 )
 abstract class CurtainDatabase : RoomDatabase() {
@@ -91,6 +106,13 @@ abstract class CurtainDatabase : RoomDatabase() {
      * @return SettingsVariantDao instance
      */
     abstract fun settingsVariantDao(): SettingsVariantDao
+
+    /**
+     * Data Access Object for collection operations.
+     *
+     * @return CurtainCollectionDao instance
+     */
+    abstract fun curtainCollectionDao(): CurtainCollectionDao
 
     companion object {
         const val DATABASE_NAME = "curtain_database"

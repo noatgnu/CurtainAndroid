@@ -280,4 +280,13 @@ class CurtainRepositoryImpl @Inject constructor(
             System.currentTimeMillis()
         }
     }
+
+    override fun getApiServiceForHost(hostname: String): CurtainApiService? {
+        return try {
+            val retrofit = NetworkModule.createRetrofitForHost(hostname, okHttpClient)
+            retrofit.create(CurtainApiService::class.java)
+        } catch (e: Exception) {
+            null
+        }
+    }
 }

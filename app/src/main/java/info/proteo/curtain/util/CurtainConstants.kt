@@ -16,6 +16,12 @@ object CurtainConstants {
         const val CURTAIN_TYPE = "TP"
     }
 
+    object ExampleCollection {
+        const val COLLECTION_ID = 2
+        const val API_URL = "https://celsus.muttsu.xyz/"
+        const val FRONTEND_URL = "https://curtain.proteo.info/"
+    }
+
     val COMMON_HOSTNAMES = listOf(
         PredefinedHosts.CELSUS_BACKEND,
         PredefinedHosts.QUEST_BACKEND,

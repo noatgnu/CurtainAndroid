@@ -45,7 +45,8 @@ fun QRScannerScreen(
     var flashEnabled by remember { mutableStateOf(false) }
     var scannedCode by remember { mutableStateOf<String?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
-    var parsedData by remember { mutableStateOf<DeepLinkResult.ParsedQRData?>(null) }
+    var showAddCollectionDialog by remember { mutableStateOf(false) }
+    var parsedData by remember { mutableStateOf<DeepLinkResult?>(null) }
 
     Scaffold(
         topBar = {
@@ -79,15 +80,25 @@ fun QRScannerScreen(
                     )
                 }
                 scannedCode != null -> {
+                    val displayInfo = when (val data = parsedData) {
+                        is DeepLinkResult.ParsedQRData -> data.linkId
+                        is DeepLinkResult.ParsedCollectionQRData -> "Collection #${data.collectionId}"
+                        else -> null
+                    }
+                    val isCollection = parsedData is DeepLinkResult.ParsedCollectionQRData
+
                     QRCodeResult(
                         code = scannedCode!!,
-                        parsedLinkId = parsedData?.linkId,
+                        parsedLinkId = displayInfo,
+                        isCollection = isCollection,
                         onUseCode = {
-                            if (parsedData != null) {
-                                showAddDialog = true
-                            } else {
-                                onQRCodeScanned(scannedCode!!)
-                                navController.navigateUp()
+                            when (parsedData) {
+                                is DeepLinkResult.ParsedQRData -> showAddDialog = true
+                                is DeepLinkResult.ParsedCollectionQRData -> showAddCollectionDialog = true
+                                else -> {
+                                    onQRCodeScanned(scannedCode!!)
+                                    navController.navigateUp()
+                                }
                             }
                         },
                         onScanAgain = {
@@ -109,11 +120,12 @@ fun QRScannerScreen(
         }
     }
 
-    if (showAddDialog && parsedData != null) {
+    val sessionData = parsedData as? DeepLinkResult.ParsedQRData
+    if (showAddDialog && sessionData != null) {
         QRAddCurtainDialog(
-            linkId = parsedData!!.linkId,
-            apiUrl = parsedData!!.apiURL ?: "https://api.curtain.proteo.info",
-            frontendUrl = parsedData!!.frontendURL ?: "",
+            linkId = sessionData.linkId,
+            apiUrl = sessionData.apiURL ?: "https://api.curtain.proteo.info",
+            frontendUrl = sessionData.frontendURL ?: "",
             onDismiss = {
                 showAddDialog = false
                 scannedCode = null
@@ -126,6 +138,29 @@ fun QRScannerScreen(
                     frontendUrl = frontendUrl
                 )
                 showAddDialog = false
+                navController.navigateUp()
+            }
+        )
+    }
+
+    val collectionData = parsedData as? DeepLinkResult.ParsedCollectionQRData
+    if (showAddCollectionDialog && collectionData != null) {
+        QRAddCollectionDialog(
+            collectionId = collectionData.collectionId,
+            apiUrl = collectionData.apiURL ?: "https://api.curtain.proteo.info",
+            frontendUrl = collectionData.frontendURL ?: "",
+            onDismiss = {
+                showAddCollectionDialog = false
+                scannedCode = null
+                parsedData = null
+            },
+            onAdd = { id, apiUrl, frontendUrl ->
+                curtainViewModel.loadCollection(
+                    collectionId = id,
+                    apiUrl = apiUrl,
+                    frontendUrl = frontendUrl.ifBlank { null }
+                )
+                showAddCollectionDialog = false
                 navController.navigateUp()
             }
         )
@@ -246,6 +281,7 @@ private fun CameraPreview(
 private fun QRCodeResult(
     code: String,
     parsedLinkId: String?,
+    isCollection: Boolean = false,
     onUseCode: () -> Unit,
     onScanAgain: () -> Unit
 ) {
@@ -267,19 +303,28 @@ private fun QRCodeResult(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = if (isCollection)
+                        MaterialTheme.colorScheme.secondaryContainer
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
                 )
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        "Detected Link ID:",
+                        if (isCollection) "Detected Collection:" else "Detected Link ID:",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (isCollection)
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        else
+                            MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
                         parsedLinkId,
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (isCollection)
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        else
+                            MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -301,7 +346,13 @@ private fun QRCodeResult(
             onClick = onUseCode,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (parsedLinkId != null) "Add Dataset" else "Use This Code")
+            Text(
+                when {
+                    isCollection -> "Add Collection"
+                    parsedLinkId != null -> "Add Dataset"
+                    else -> "Use This Code"
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -368,6 +419,72 @@ private fun QRAddCurtainDialog(
                     }
                 },
                 enabled = editedLinkId.isNotBlank() && editedApiUrl.isNotBlank()
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QRAddCollectionDialog(
+    collectionId: Int,
+    apiUrl: String,
+    frontendUrl: String,
+    onDismiss: () -> Unit,
+    onAdd: (collectionId: Int, apiUrl: String, frontendUrl: String) -> Unit
+) {
+    var editedCollectionId by remember { mutableStateOf(collectionId.toString()) }
+    var editedApiUrl by remember { mutableStateOf(apiUrl) }
+    var editedFrontendUrl by remember { mutableStateOf(frontendUrl) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Collection from QR Code") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = editedCollectionId,
+                    onValueChange = { editedCollectionId = it },
+                    label = { Text("Collection ID") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = editedApiUrl,
+                    onValueChange = { editedApiUrl = it },
+                    label = { Text("API URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = editedFrontendUrl,
+                    onValueChange = { editedFrontendUrl = it },
+                    label = { Text("Frontend URL (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val id = editedCollectionId.toIntOrNull()
+                    if (id != null && editedApiUrl.isNotBlank()) {
+                        onAdd(id, editedApiUrl.trim(), editedFrontendUrl.trim())
+                    }
+                },
+                enabled = editedCollectionId.toIntOrNull() != null && editedApiUrl.isNotBlank()
             ) {
                 Text("Add")
             }

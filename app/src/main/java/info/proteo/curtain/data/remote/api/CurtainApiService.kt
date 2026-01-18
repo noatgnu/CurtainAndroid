@@ -1,5 +1,6 @@
 package info.proteo.curtain.data.remote.api
 
+import info.proteo.curtain.data.remote.model.CurtainCollectionDto
 import info.proteo.curtain.data.remote.model.CurtainDto
 import info.proteo.curtain.data.remote.model.DataFilterListDto
 import info.proteo.curtain.data.remote.model.PaginatedResponse
@@ -126,4 +127,32 @@ interface CurtainApiService {
         @Query("search") search: String,
         @Query("limit") limit: Int = 10
     ): PaginatedResponse<CurtainDto>
+
+    /**
+     * Get all collections with pagination.
+     *
+     * @param limit Maximum number of results
+     * @param offset Pagination offset
+     * @param search Optional search query
+     * @return Paginated list of collection DTOs
+     */
+    @GET("curtain-collections/")
+    suspend fun getCollections(
+        @Query("limit") limit: Int = 10,
+        @Query("offset") offset: Int = 0,
+        @Query("search") search: String? = null
+    ): PaginatedResponse<CurtainCollectionDto>
+
+    /**
+     * Get a specific collection by ID with its accessible sessions.
+     *
+     * @param id Collection ID
+     * @param curtainType Optional filter by curtain type (e.g., "TP")
+     * @return Collection DTO with accessible curtains
+     */
+    @GET("curtain-collections/{id}/")
+    suspend fun getCollectionById(
+        @Path("id") id: Int,
+        @Query("curtain_type") curtainType: String? = null
+    ): CurtainCollectionDto
 }

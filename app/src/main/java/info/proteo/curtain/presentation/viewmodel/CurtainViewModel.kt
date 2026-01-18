@@ -3,7 +3,10 @@ package info.proteo.curtain.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import info.proteo.curtain.data.local.entity.CollectionSessionEntity
+import info.proteo.curtain.data.local.entity.CurtainCollectionEntity
 import info.proteo.curtain.data.local.entity.CurtainEntity
+import info.proteo.curtain.data.repository.CurtainCollectionRepository
 import info.proteo.curtain.domain.repository.CurtainRepository
 import info.proteo.curtain.domain.repository.SiteSettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +27,8 @@ import javax.inject.Inject
 @HiltViewModel
 class CurtainViewModel @Inject constructor(
     private val curtainRepository: CurtainRepository,
-    private val siteSettingsRepository: SiteSettingsRepository
+    private val siteSettingsRepository: SiteSettingsRepository,
+    private val collectionRepository: CurtainCollectionRepository
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
@@ -38,6 +42,15 @@ class CurtainViewModel @Inject constructor(
 
     private val _downloadProgress = MutableStateFlow<Map<String, Int>>(emptyMap())
     val downloadProgress: StateFlow<Map<String, Int>> = _downloadProgress.asStateFlow()
+
+    private val _expandedCollectionIds = MutableStateFlow<Set<Long>>(emptySet())
+    val expandedCollectionIds: StateFlow<Set<Long>> = _expandedCollectionIds.asStateFlow()
+
+    private val _collectionSessions = MutableStateFlow<Map<Long, List<CollectionSessionEntity>>>(emptyMap())
+    val collectionSessions: StateFlow<Map<Long, List<CollectionSessionEntity>>> = _collectionSessions.asStateFlow()
+
+    private val _isLoadingCollections = MutableStateFlow(false)
+    val isLoadingCollections: StateFlow<Boolean> = _isLoadingCollections.asStateFlow()
 
     /**
      * Curtains list combined with search query.
@@ -211,6 +224,17 @@ class CurtainViewModel @Inject constructor(
     }
 
     /**
+     * Load example collection for demonstration.
+     */
+    fun loadExampleCollection() {
+        loadCollection(
+            collectionId = info.proteo.curtain.util.CurtainConstants.ExampleCollection.COLLECTION_ID,
+            apiUrl = info.proteo.curtain.util.CurtainConstants.ExampleCollection.API_URL,
+            frontendUrl = info.proteo.curtain.util.CurtainConstants.ExampleCollection.FRONTEND_URL
+        )
+    }
+
+    /**
      * Load curtain from specific link ID and API URL.
      * Matches iOS loadCurtain(linkId:apiUrl:frontendUrl:) method.
      *
@@ -282,5 +306,133 @@ class CurtainViewModel @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    val collections: StateFlow<List<CurtainCollectionEntity>> = combine(
+        collectionRepository.getAllCollections(),
+        _searchQuery
+    ) { collectionsList, query ->
+        if (query.isEmpty()) {
+            collectionsList
+        } else {
+            collectionsList.filter {
+                it.name.contains(query, ignoreCase = true) ||
+                        it.description.contains(query, ignoreCase = true)
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    fun toggleCollectionExpanded(collectionLocalId: Long) {
+        viewModelScope.launch {
+            val currentExpanded = _expandedCollectionIds.value
+            if (currentExpanded.contains(collectionLocalId)) {
+                _expandedCollectionIds.value = currentExpanded - collectionLocalId
+            } else {
+                _expandedCollectionIds.value = currentExpanded + collectionLocalId
+                if (!_collectionSessions.value.containsKey(collectionLocalId)) {
+                    loadCollectionSessions(collectionLocalId)
+                }
+            }
+        }
+    }
+
+    private suspend fun loadCollectionSessions(collectionLocalId: Long) {
+        try {
+            val sessions = collectionRepository.getSessionsByCollectionIdSync(collectionLocalId)
+            _collectionSessions.value = _collectionSessions.value.toMutableMap().apply {
+                put(collectionLocalId, sessions)
+            }
+        } catch (e: Exception) {
+            _error.value = "Failed to load collection sessions: ${e.message}"
+        }
+    }
+
+    fun loadCollection(collectionId: Int, apiUrl: String, frontendUrl: String? = null) {
+        viewModelScope.launch {
+            _isLoadingCollections.value = true
+            _error.value = null
+
+            try {
+                val apiService = curtainRepository.getApiServiceForHost(apiUrl)
+                if (apiService != null) {
+                    val result = collectionRepository.fetchCollectionFromApi(
+                        apiService = apiService,
+                        collectionId = collectionId,
+                        hostname = apiUrl,
+                        frontendURL = frontendUrl,
+                        curtainType = "TP"
+                    )
+
+                    result.onSuccess { collection ->
+                        _expandedCollectionIds.value = _expandedCollectionIds.value + collection.localId
+                        loadCollectionSessions(collection.localId)
+                        _isLoadingCollections.value = false
+                    }.onFailure { e ->
+                        _error.value = "Failed to load collection: ${e.message}"
+                        _isLoadingCollections.value = false
+                    }
+                } else {
+                    _error.value = "API service not available for $apiUrl"
+                    _isLoadingCollections.value = false
+                }
+            } catch (e: Exception) {
+                _error.value = "Error loading collection: ${e.message}"
+                _isLoadingCollections.value = false
+            }
+        }
+    }
+
+    fun refreshCollection(collectionLocalId: Long) {
+        viewModelScope.launch {
+            _isLoadingCollections.value = true
+            try {
+                val collection = collectionRepository.getCollectionByLocalId(collectionLocalId)
+                if (collection != null) {
+                    val apiService = curtainRepository.getApiServiceForHost(collection.sourceHostname)
+                    if (apiService != null) {
+                        val result = collectionRepository.refreshCollection(apiService, collectionLocalId, "TP")
+                        result.onSuccess {
+                            loadCollectionSessions(collectionLocalId)
+                        }.onFailure { e ->
+                            _error.value = "Failed to refresh collection: ${e.message}"
+                        }
+                    } else {
+                        _error.value = "API service not available"
+                    }
+                } else {
+                    _error.value = "Collection not found"
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to refresh collection: ${e.message}"
+            } finally {
+                _isLoadingCollections.value = false
+            }
+        }
+    }
+
+    fun deleteCollection(collectionLocalId: Long) {
+        viewModelScope.launch {
+            try {
+                collectionRepository.deleteCollection(collectionLocalId)
+                _expandedCollectionIds.value = _expandedCollectionIds.value - collectionLocalId
+                _collectionSessions.value = _collectionSessions.value.toMutableMap().apply {
+                    remove(collectionLocalId)
+                }
+            } catch (e: Exception) {
+                _error.value = "Failed to delete collection: ${e.message}"
+            }
+        }
+    }
+
+    fun loadSessionFromCollection(session: CollectionSessionEntity, collection: CurtainCollectionEntity) {
+        loadCurtain(
+            linkId = session.linkId,
+            apiUrl = collection.sourceHostname,
+            frontendUrl = collection.frontendURL
+        )
     }
 }

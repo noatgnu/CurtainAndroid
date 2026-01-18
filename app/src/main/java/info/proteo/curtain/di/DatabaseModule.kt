@@ -2,12 +2,15 @@ package info.proteo.curtain.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import info.proteo.curtain.data.local.CurtainDatabase
+import info.proteo.curtain.data.local.dao.CurtainCollectionDao
 import info.proteo.curtain.data.local.dao.CurtainDao
 import info.proteo.curtain.data.local.dao.DataFilterListDao
 import info.proteo.curtain.data.local.dao.ProteinSearchListDao
@@ -27,12 +30,58 @@ import javax.inject.Singleton
 object DatabaseModule {
 
     /**
+     * Migration from version 5 to 6.
+     * Changes collection_session to many-to-many relationship:
+     * - Creates junction table collection_session_cross_ref
+     * - Recreates collection_session with linkId as primary key
+     * - Only affects collection tables, preserves all other user data
+     */
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS collection_session_cross_ref (
+                    collectionLocalId INTEGER NOT NULL,
+                    linkId TEXT NOT NULL,
+                    PRIMARY KEY(collectionLocalId, linkId),
+                    FOREIGN KEY(collectionLocalId) REFERENCES curtain_collection(localId) ON DELETE CASCADE
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_collection_session_cross_ref_collectionLocalId ON collection_session_cross_ref(collectionLocalId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_collection_session_cross_ref_linkId ON collection_session_cross_ref(linkId)")
+
+            db.execSQL("""
+                INSERT OR IGNORE INTO collection_session_cross_ref (collectionLocalId, linkId)
+                SELECT collectionLocalId, linkId FROM collection_session
+            """)
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS collection_session_new (
+                    linkId TEXT NOT NULL PRIMARY KEY,
+                    id INTEGER NOT NULL,
+                    description TEXT NOT NULL,
+                    created INTEGER NOT NULL,
+                    curtainType TEXT,
+                    sourceHostname TEXT NOT NULL DEFAULT ''
+                )
+            """)
+
+            db.execSQL("""
+                INSERT OR IGNORE INTO collection_session_new (linkId, id, description, created, curtainType, sourceHostname)
+                SELECT cs.linkId, cs.id, cs.description, cs.created, cs.curtainType,
+                       COALESCE(cc.sourceHostname, '') as sourceHostname
+                FROM collection_session cs
+                LEFT JOIN curtain_collection cc ON cs.collectionLocalId = cc.localId
+            """)
+
+            db.execSQL("DROP TABLE collection_session")
+            db.execSQL("ALTER TABLE collection_session_new RENAME TO collection_session")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_collection_session_sourceHostname ON collection_session(sourceHostname)")
+        }
+    }
+
+    /**
      * Provides the Room database instance.
-     * Database is created with fallback to destructive migration for development.
-     *
-     * In production, implement proper migration strategies:
-     * - .addMigrations(MIGRATION_1_2, MIGRATION_2_3, ...)
-     * - .fallbackToDestructiveMigration() only for development
+     * Uses proper migrations to preserve user data across schema changes.
      *
      * @param context Application context
      * @return CurtainDatabase instance
@@ -47,6 +96,7 @@ object DatabaseModule {
             CurtainDatabase::class.java,
             CurtainDatabase.DATABASE_NAME
         )
+            .addMigrations(MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -121,5 +171,11 @@ object DatabaseModule {
     @Singleton
     fun provideSettingsVariantDao(database: CurtainDatabase): SettingsVariantDao {
         return database.settingsVariantDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideCurtainCollectionDao(database: CurtainDatabase): CurtainCollectionDao {
+        return database.curtainCollectionDao()
     }
 }

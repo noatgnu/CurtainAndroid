@@ -125,3 +125,61 @@ data class ApiError(
     @SerializedName("error")
     val error: String?
 )
+
+/**
+ * Data transfer object for accessible curtain within a collection.
+ */
+data class AccessibleCurtainDto(
+    @SerializedName("id")
+    val id: Int,
+
+    @SerializedName("link_id")
+    val linkId: String,
+
+    @SerializedName("description")
+    val description: String,
+
+    @SerializedName("created")
+    val created: String,
+
+    @SerializedName("curtain_type")
+    val curtainType: String?
+)
+
+/**
+ * Data transfer object for Curtain collection API responses.
+ */
+data class CurtainCollectionDto(
+    @SerializedName("id")
+    val id: Int,
+
+    @SerializedName("created")
+    val created: String,
+
+    @SerializedName("updated")
+    val updated: String,
+
+    @SerializedName("name")
+    val name: String,
+
+    @SerializedName("description")
+    val description: String,
+
+    @SerializedName("enable")
+    val enable: Boolean,
+
+    @SerializedName("owner")
+    val owner: Int,
+
+    @SerializedName("owner_username")
+    val ownerUsername: String,
+
+    @SerializedName("curtains")
+    val curtains: List<Int>,
+
+    @SerializedName("curtain_count")
+    val curtainCount: Int,
+
+    @SerializedName("accessible_curtains")
+    val accessibleCurtains: List<AccessibleCurtainDto>
+)

@@ -25,7 +25,7 @@ class DeepLinkHandler @Inject constructor(
         return processUri(uri)
     }
 
-    fun parseQRCodeForDialog(qrContent: String): DeepLinkResult.ParsedQRData? {
+    fun parseQRCodeForDialog(qrContent: String): DeepLinkResult? {
         val uri = try {
             Uri.parse(qrContent)
         } catch (e: Exception) {
@@ -33,13 +33,13 @@ class DeepLinkHandler @Inject constructor(
         }
 
         return when {
-            uri.scheme == "curtain" && uri.host == "open" -> {
-                val uniqueId = uri.getQueryParameter("uniqueId")
+            uri.scheme == "curtain" && uri.host == "collection" -> {
+                val collectionId = uri.getQueryParameter("collectionId")?.toIntOrNull()
                 val apiURL = uri.getQueryParameter("apiURL")
                 val frontendURL = uri.getQueryParameter("frontendURL")
-                if (uniqueId != null) {
-                    DeepLinkResult.ParsedQRData(
-                        linkId = uniqueId,
+                if (collectionId != null) {
+                    DeepLinkResult.ParsedCollectionQRData(
+                        collectionId = collectionId,
                         apiURL = apiURL,
                         frontendURL = frontendURL
                     )
@@ -47,8 +47,52 @@ class DeepLinkHandler @Inject constructor(
                     null
                 }
             }
+            uri.scheme == "curtain" && uri.host == "open" -> {
+                val collectionId = uri.getQueryParameter("collectionId")?.toIntOrNull()
+                if (collectionId != null) {
+                    val apiURL = uri.getQueryParameter("apiURL")
+                    val frontendURL = uri.getQueryParameter("frontendURL")
+                    DeepLinkResult.ParsedCollectionQRData(
+                        collectionId = collectionId,
+                        apiURL = apiURL,
+                        frontendURL = frontendURL
+                    )
+                } else {
+                    val uniqueId = uri.getQueryParameter("uniqueId")
+                    val apiURL = uri.getQueryParameter("apiURL")
+                    val frontendURL = uri.getQueryParameter("frontendURL")
+                    if (uniqueId != null) {
+                        DeepLinkResult.ParsedQRData(
+                            linkId = uniqueId,
+                            apiURL = apiURL,
+                            frontendURL = frontendURL
+                        )
+                    } else {
+                        null
+                    }
+                }
+            }
             uri.host?.contains("curtain") == true -> {
                 val fragment = uri.fragment
+                val pathOrFragment = fragment?.removePrefix("/") ?: uri.path?.removePrefix("/")
+
+                if (pathOrFragment?.startsWith("collection/") == true) {
+                    val collectionId = pathOrFragment.removePrefix("collection/").split("/").firstOrNull()?.toIntOrNull()
+                    if (collectionId != null) {
+                        val baseUrl = "${uri.scheme}://${uri.host}"
+                        val apiUrl = if (uri.host?.contains("curtain.proteo.info") == true) {
+                            "https://api.curtain.proteo.info"
+                        } else {
+                            "$baseUrl/api"
+                        }
+                        return DeepLinkResult.ParsedCollectionQRData(
+                            collectionId = collectionId,
+                            apiURL = apiUrl,
+                            frontendURL = qrContent
+                        )
+                    }
+                }
+
                 val linkId = if (fragment != null && fragment.isNotEmpty()) {
                     fragment.removePrefix("/").split("/").firstOrNull { it.isNotEmpty() && it != "home" }
                 } else {
@@ -87,17 +131,61 @@ class DeepLinkHandler @Inject constructor(
 
     private suspend fun processUri(uri: Uri): DeepLinkResult? {
         return when {
+            uri.scheme == "curtain" && uri.host == "collection" -> {
+                processCollectionDeepLink(uri)
+            }
             uri.scheme == "curtain" && uri.host == "open" -> {
-                processCurtainDeepLink(uri)
+                val collectionId = uri.getQueryParameter("collectionId")?.toIntOrNull()
+                if (collectionId != null) {
+                    processCollectionDeepLink(uri)
+                } else {
+                    processCurtainDeepLink(uri)
+                }
             }
             uri.toString().contains("doi.org") -> {
                 processDOILink(uri)
             }
             uri.host?.contains("curtain.proteo.info") == true -> {
-                processWebLink(uri)
+                val path = uri.path ?: ""
+                val fragment = uri.fragment ?: ""
+                if (path.contains("collection/") || fragment.contains("collection/")) {
+                    processCollectionWebLink(uri)
+                } else {
+                    processWebLink(uri)
+                }
             }
             else -> null
         }
+    }
+
+    private fun processCollectionDeepLink(uri: Uri): DeepLinkResult? {
+        val collectionId = uri.getQueryParameter("collectionId")?.toIntOrNull() ?: return null
+        val apiURL = uri.getQueryParameter("apiURL") ?: return null
+        val frontendURL = uri.getQueryParameter("frontendURL")
+
+        return DeepLinkResult.CollectionData(
+            collectionId = collectionId,
+            apiURL = apiURL,
+            frontendURL = frontendURL
+        )
+    }
+
+    private fun processCollectionWebLink(uri: Uri): DeepLinkResult? {
+        val path = uri.path ?: uri.fragment ?: return null
+        val collectionPath = path.removePrefix("/").removePrefix("#/")
+
+        if (!collectionPath.startsWith("collection/")) return null
+
+        val collectionId = collectionPath.removePrefix("collection/")
+            .split("/")
+            .firstOrNull()
+            ?.toIntOrNull() ?: return null
+
+        return DeepLinkResult.CollectionData(
+            collectionId = collectionId,
+            apiURL = "https://api.curtain.proteo.info",
+            frontendURL = uri.toString()
+        )
     }
 
     private suspend fun processCurtainDeepLink(uri: Uri): DeepLinkResult? {
@@ -174,6 +262,18 @@ sealed class DeepLinkResult {
 
     data class ParsedQRData(
         val linkId: String,
+        val apiURL: String?,
+        val frontendURL: String?
+    ) : DeepLinkResult()
+
+    data class CollectionData(
+        val collectionId: Int,
+        val apiURL: String,
+        val frontendURL: String?
+    ) : DeepLinkResult()
+
+    data class ParsedCollectionQRData(
+        val collectionId: Int,
         val apiURL: String?,
         val frontendURL: String?
     ) : DeepLinkResult()

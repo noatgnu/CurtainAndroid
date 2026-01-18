@@ -1,5 +1,8 @@
 package info.proteo.curtain.presentation.ui.curtain
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,6 +10,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,6 +32,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
@@ -33,9 +40,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import info.proteo.curtain.data.local.entity.CollectionSessionEntity
+import info.proteo.curtain.data.local.entity.CurtainCollectionEntity
 import info.proteo.curtain.data.local.entity.CurtainEntity
 import info.proteo.curtain.presentation.ui.dialogs.AddCurtainDialog
 import info.proteo.curtain.presentation.ui.settings.ThemeSettingsScreen
@@ -54,18 +64,27 @@ fun TwoPaneCurtainListScreen(
     curtainViewModel: CurtainViewModel = hiltViewModel()
 ) {
     val curtains by curtainViewModel.curtains.collectAsState()
+    val collections by curtainViewModel.collections.collectAsState()
     val isLoading by curtainViewModel.isLoading.collectAsState()
+    val isLoadingCollections by curtainViewModel.isLoadingCollections.collectAsState()
     val error by curtainViewModel.error.collectAsState()
     val searchQuery by curtainViewModel.searchQuery.collectAsState()
     val downloadProgress by curtainViewModel.downloadProgress.collectAsState()
+    val expandedCollectionIds by curtainViewModel.expandedCollectionIds.collectAsState()
+    val collectionSessions by curtainViewModel.collectionSessions.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedCurtain by remember { mutableStateOf<CurtainEntity?>(null) }
+
+    var selectedListTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val listTabTitles = listOf("Sessions", "Collections")
 
     var showEditDialog by remember { mutableStateOf(false) }
     var curtainToEdit by remember { mutableStateOf<CurtainEntity?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var curtainToDelete by remember { mutableStateOf<CurtainEntity?>(null) }
+    var showDeleteCollectionDialog by remember { mutableStateOf(false) }
+    var collectionToDelete by remember { mutableStateOf<CurtainCollectionEntity?>(null) }
     var showAddCurtainDialog by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }
     var showThemeSettings by remember { mutableStateOf(false) }
@@ -105,56 +124,117 @@ fun TwoPaneCurtainListScreen(
                     singleLine = true
                 )
 
-                when {
-                    isLoading && curtains.isEmpty() -> {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                TabRow(selectedTabIndex = selectedListTabIndex) {
+                    listTabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedListTabIndex == index,
+                            onClick = { selectedListTabIndex = index },
+                            text = { Text(title) }
+                        )
                     }
+                }
 
-                    curtains.isEmpty() -> {
-                        Box(modifier = Modifier.weight(1f)) {
-                            EmptyState(
-                                onLoadExample = { curtainViewModel.loadExampleCurtain() }
-                            )
-                        }
-                    }
+                when (selectedListTabIndex) {
+                    0 -> {
+                        when {
+                            isLoading && curtains.isEmpty() -> {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
 
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                        ) {
-                            items(curtains, key = { it.linkId }) { curtain ->
-                                CurtainItemCompact(
-                                    curtain = curtain,
-                                    isSelected = selectedCurtain?.linkId == curtain.linkId,
-                                    downloadProgress = downloadProgress[curtain.linkId],
-                                    onDownload = { curtainViewModel.downloadCurtain(curtain) },
-                                    onTogglePin = { curtainViewModel.togglePin(curtain) },
-                                    onEdit = {
-                                        curtainToEdit = curtain
-                                        showEditDialog = true
-                                    },
-                                    onRedownload = { curtainViewModel.downloadCurtain(curtain) },
-                                    onDelete = {
-                                        curtainToDelete = curtain
-                                        showDeleteDialog = true
-                                    },
-                                    onClick = {
-                                        if (curtain.file != null) {
-                                            selectedCurtain = curtain
-                                        } else {
-                                            curtainViewModel.downloadCurtain(curtain)
-                                        }
+                            curtains.isEmpty() -> {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    EmptyState(
+                                        onLoadExample = { curtainViewModel.loadExampleCurtain() }
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    items(curtains, key = { it.linkId }) { curtain ->
+                                        CurtainItemCompact(
+                                            curtain = curtain,
+                                            isSelected = selectedCurtain?.linkId == curtain.linkId,
+                                            downloadProgress = downloadProgress[curtain.linkId],
+                                            onDownload = { curtainViewModel.downloadCurtain(curtain) },
+                                            onTogglePin = { curtainViewModel.togglePin(curtain) },
+                                            onEdit = {
+                                                curtainToEdit = curtain
+                                                showEditDialog = true
+                                            },
+                                            onRedownload = { curtainViewModel.downloadCurtain(curtain) },
+                                            onDelete = {
+                                                curtainToDelete = curtain
+                                                showDeleteDialog = true
+                                            },
+                                            onClick = {
+                                                if (curtain.file != null) {
+                                                    selectedCurtain = curtain
+                                                } else {
+                                                    curtainViewModel.downloadCurtain(curtain)
+                                                }
+                                            }
+                                        )
                                     }
-                                )
+                                }
+                            }
+                        }
+                    }
+                    1 -> {
+                        when {
+                            isLoadingCollections && collections.isEmpty() -> {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+
+                            collections.isEmpty() -> {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    TabletCollectionsEmptyState(
+                                        onLoadExample = { curtainViewModel.loadExampleCollection() }
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                ) {
+                                    items(collections, key = { it.localId }) { collection ->
+                                        CollectionItemCompact(
+                                            collection = collection,
+                                            isExpanded = expandedCollectionIds.contains(collection.localId),
+                                            sessions = collectionSessions[collection.localId] ?: emptyList(),
+                                            onToggleExpand = { curtainViewModel.toggleCollectionExpanded(collection.localId) },
+                                            onRefresh = { curtainViewModel.refreshCollection(collection.localId) },
+                                            onDelete = {
+                                                collectionToDelete = collection
+                                                showDeleteCollectionDialog = true
+                                            },
+                                            onSessionClick = { session ->
+                                                curtainViewModel.loadSessionFromCollection(session, collection)
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -249,6 +329,17 @@ fun TwoPaneCurtainListScreen(
         )
     }
 
+    if (showDeleteCollectionDialog && collectionToDelete != null) {
+        TabletDeleteCollectionDialog(
+            collectionName = collectionToDelete!!.name,
+            onDismiss = { showDeleteCollectionDialog = false },
+            onConfirm = {
+                curtainViewModel.deleteCollection(collectionToDelete!!.localId)
+                showDeleteCollectionDialog = false
+            }
+        )
+    }
+
     if (showAddCurtainDialog) {
         AddCurtainDialog(
             onDismiss = { showAddCurtainDialog = false },
@@ -281,12 +372,13 @@ private fun CurtainItemCompact(
     onClick: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val isDownloading = downloadProgress != null
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clickable(onClick = onClick),
+            .clickable(enabled = !isDownloading, onClick = onClick),
         colors = if (isSelected) {
             CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         } else {
@@ -342,12 +434,22 @@ private fun CurtainItemCompact(
                     }
 
                     if (curtain.file == null) {
-                        IconButton(onClick = onDownload) {
-                            Icon(
-                                Icons.Default.Download,
-                                contentDescription = "Download",
-                                modifier = Modifier.size(20.dp)
-                            )
+                        IconButton(
+                            onClick = onDownload,
+                            enabled = !isDownloading
+                        ) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = "Download",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     } else {
                         Box {
@@ -717,5 +819,259 @@ private fun ProteinChartDialog(
             }
         }
     }
+}
+
+@Composable
+private fun CollectionItemCompact(
+    collection: CurtainCollectionEntity,
+    isExpanded: Boolean,
+    sessions: List<CollectionSessionEntity>,
+    onToggleExpand: () -> Unit,
+    onRefresh: () -> Unit,
+    onDelete: () -> Unit,
+    onSessionClick: (CollectionSessionEntity) -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .clickable(onClick = onToggleExpand),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = collection.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${collection.curtainCount} sessions",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = collection.sourceHostname.removePrefix("https://").removePrefix("http://"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Row {
+                    IconButton(onClick = onToggleExpand) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "More",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Refresh") },
+                                onClick = {
+                                    onRefresh()
+                                    showMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Refresh, contentDescription = null)
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                onClick = {
+                                    onDelete()
+                                    showMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                colors = MenuDefaults.itemColors(
+                                    textColor = MaterialTheme.colorScheme.error
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (sessions.isEmpty()) {
+                        Text(
+                            text = "Loading sessions...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 28.dp, top = 4.dp)
+                        )
+                    } else {
+                        sessions.forEach { session ->
+                            CollectionSessionItemCompact(
+                                session = session,
+                                onClick = { onSessionClick(session) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionSessionItemCompact(
+    session: CollectionSessionEntity,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 28.dp, top = 4.dp, bottom = 4.dp, end = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = session.description.ifBlank { session.linkId },
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            session.curtainType?.let { type ->
+                Text(
+                    text = type,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Default.Download,
+            contentDescription = "Load session",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun TabletCollectionsEmptyState(
+    onLoadExample: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Folder,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "No collections found",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Load an example collection or add via QR code",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onLoadExample) {
+            Text("Load Example Collection")
+        }
+    }
+}
+
+@Composable
+private fun TabletDeleteCollectionDialog(
+    collectionName: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        },
+        title = { Text("Delete Collection") },
+        text = {
+            Text(
+                "Are you sure you want to delete \"$collectionName\"?",
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 

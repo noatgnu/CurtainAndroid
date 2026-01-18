@@ -144,4 +144,12 @@ interface CurtainRepository {
         hostname: String,
         frontendURL: String? = null
     ): Result<CurtainEntity>
+
+    /**
+     * Get API service for a specific hostname.
+     *
+     * @param hostname Backend API URL
+     * @return CurtainApiService instance or null if creation fails
+     */
+    fun getApiServiceForHost(hostname: String): info.proteo.curtain.data.remote.api.CurtainApiService?
 }
