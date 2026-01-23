@@ -1,0 +1,704 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "04cd6c06a1180605d27c54091cef1b69",
+    "entities": [
+      {
+        "tableName": "curtain",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`linkId` TEXT NOT NULL, `created` INTEGER NOT NULL, `updated` INTEGER NOT NULL, `file` TEXT, `sessionName` TEXT, `dataDescription` TEXT NOT NULL, `enable` INTEGER NOT NULL, `curtainType` TEXT NOT NULL, `sourceHostname` TEXT NOT NULL, `frontendURL` TEXT, `isPinned` INTEGER NOT NULL, PRIMARY KEY(`linkId`))",
+        "fields": [
+          {
+            "fieldPath": "linkId",
+            "columnName": "linkId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updated",
+            "columnName": "updated",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "file",
+            "columnName": "file",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sessionName",
+            "columnName": "sessionName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "dataDescription",
+            "columnName": "dataDescription",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enable",
+            "columnName": "enable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curtainType",
+            "columnName": "curtainType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceHostname",
+            "columnName": "sourceHostname",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frontendURL",
+            "columnName": "frontendURL",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isPinned",
+            "columnName": "isPinned",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "linkId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_curtain_linkId",
+            "unique": true,
+            "columnNames": [
+              "linkId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_curtain_linkId` ON `${TABLE_NAME}` (`linkId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "site_settings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`hostname` TEXT NOT NULL, `lastSync` INTEGER NOT NULL, `active` INTEGER NOT NULL, `apiKey` TEXT, `notes` TEXT, `siteDescription` TEXT, `requiresAuthentication` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`hostname`))",
+        "fields": [
+          {
+            "fieldPath": "hostname",
+            "columnName": "hostname",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSync",
+            "columnName": "lastSync",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "active",
+            "columnName": "active",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKey",
+            "columnName": "apiKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "siteDescription",
+            "columnName": "siteDescription",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requiresAuthentication",
+            "columnName": "requiresAuthentication",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "hostname"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_site_settings_hostname",
+            "unique": true,
+            "columnNames": [
+              "hostname"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_site_settings_hostname` ON `${TABLE_NAME}` (`hostname`)"
+          }
+        ]
+      },
+      {
+        "tableName": "data_filter_list",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `apiId` INTEGER, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `data` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `user` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiId",
+            "columnName": "apiId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "data",
+            "columnName": "data",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "user",
+            "columnName": "user",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_data_filter_list_apiId",
+            "unique": true,
+            "columnNames": [
+              "apiId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_data_filter_list_apiId` ON `${TABLE_NAME}` (`apiId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "selection_groups",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `curtainLinkId` TEXT NOT NULL, `name` TEXT NOT NULL, `color` TEXT NOT NULL, `proteins` TEXT NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curtainLinkId",
+            "columnName": "curtainLinkId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "color",
+            "columnName": "color",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "proteins",
+            "columnName": "proteins",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isActive",
+            "columnName": "isActive",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "protein_search_lists",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `curtainLinkId` TEXT NOT NULL, `name` TEXT NOT NULL, `proteinIds` TEXT NOT NULL, `description` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curtainLinkId",
+            "columnName": "curtainLinkId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "proteinIds",
+            "columnName": "proteinIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "settings_variants",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `curtainLinkId` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `settingsJson` TEXT NOT NULL, `isDefault` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curtainLinkId",
+            "columnName": "curtainLinkId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "settingsJson",
+            "columnName": "settingsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDefault",
+            "columnName": "isDefault",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "curtain_collection",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `id` INTEGER NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `enable` INTEGER NOT NULL, `ownerUsername` TEXT NOT NULL, `curtainCount` INTEGER NOT NULL, `created` INTEGER NOT NULL, `updated` INTEGER NOT NULL, `sourceHostname` TEXT NOT NULL, `frontendURL` TEXT, `lastFetched` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "localId",
+            "columnName": "localId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enable",
+            "columnName": "enable",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ownerUsername",
+            "columnName": "ownerUsername",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curtainCount",
+            "columnName": "curtainCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updated",
+            "columnName": "updated",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceHostname",
+            "columnName": "sourceHostname",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "frontendURL",
+            "columnName": "frontendURL",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastFetched",
+            "columnName": "lastFetched",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "localId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_curtain_collection_id_sourceHostname",
+            "unique": true,
+            "columnNames": [
+              "id",
+              "sourceHostname"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_curtain_collection_id_sourceHostname` ON `${TABLE_NAME}` (`id`, `sourceHostname`)"
+          }
+        ]
+      },
+      {
+        "tableName": "collection_session",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`linkId` TEXT NOT NULL, `id` INTEGER NOT NULL, `sessionName` TEXT, `description` TEXT NOT NULL, `created` INTEGER NOT NULL, `curtainType` TEXT, `sourceHostname` TEXT NOT NULL, PRIMARY KEY(`linkId`))",
+        "fields": [
+          {
+            "fieldPath": "linkId",
+            "columnName": "linkId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionName",
+            "columnName": "sessionName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "curtainType",
+            "columnName": "curtainType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceHostname",
+            "columnName": "sourceHostname",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "linkId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_collection_session_sourceHostname",
+            "unique": false,
+            "columnNames": [
+              "sourceHostname"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_collection_session_sourceHostname` ON `${TABLE_NAME}` (`sourceHostname`)"
+          }
+        ]
+      },
+      {
+        "tableName": "collection_session_cross_ref",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`collectionLocalId` INTEGER NOT NULL, `linkId` TEXT NOT NULL, PRIMARY KEY(`collectionLocalId`, `linkId`), FOREIGN KEY(`collectionLocalId`) REFERENCES `curtain_collection`(`localId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "collectionLocalId",
+            "columnName": "collectionLocalId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "linkId",
+            "columnName": "linkId",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "collectionLocalId",
+            "linkId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_collection_session_cross_ref_collectionLocalId",
+            "unique": false,
+            "columnNames": [
+              "collectionLocalId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_collection_session_cross_ref_collectionLocalId` ON `${TABLE_NAME}` (`collectionLocalId`)"
+          },
+          {
+            "name": "index_collection_session_cross_ref_linkId",
+            "unique": false,
+            "columnNames": [
+              "linkId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_collection_session_cross_ref_linkId` ON `${TABLE_NAME}` (`linkId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "curtain_collection",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "collectionLocalId"
+            ],
+            "referencedColumns": [
+              "localId"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "saved_cross_dataset_search",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `searchTerms` TEXT NOT NULL, `searchType` TEXT NOT NULL, `datasetLinkIds` TEXT NOT NULL, `significantOnly` INTEGER NOT NULL, `useRegex` INTEGER NOT NULL, `resultSummariesJson` TEXT NOT NULL, `proteinCount` INTEGER NOT NULL, `datasetCount` INTEGER NOT NULL, `created` INTEGER NOT NULL, `lastOpened` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "searchTerms",
+            "columnName": "searchTerms",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "searchType",
+            "columnName": "searchType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "datasetLinkIds",
+            "columnName": "datasetLinkIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "significantOnly",
+            "columnName": "significantOnly",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "useRegex",
+            "columnName": "useRegex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resultSummariesJson",
+            "columnName": "resultSummariesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "proteinCount",
+            "columnName": "proteinCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "datasetCount",
+            "columnName": "datasetCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "created",
+            "columnName": "created",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastOpened",
+            "columnName": "lastOpened",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '04cd6c06a1180605d27c54091cef1b69')"
+    ]
+  }
+}

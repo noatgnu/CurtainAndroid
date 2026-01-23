@@ -20,7 +20,7 @@ class ProteinMappingDatabaseManager @Inject constructor(
 
     companion object {
         const val SCHEMA_VERSION_KEY = "schema_version"
-        const val CURRENT_SCHEMA_VERSION = 2
+        const val CURRENT_SCHEMA_VERSION = 3
     }
 
     private fun getDatabaseForLinkId(linkId: String): ProteinMappingDatabase {
@@ -121,6 +121,16 @@ class ProteinMappingDatabaseManager @Inject constructor(
         } catch (e: Exception) {
             Log.e("ProteinMappingDB", "Error querying gene names for $linkId", e)
             emptyList()
+        }
+    }
+
+    suspend fun getGeneNameFromPrimaryId(linkId: String, primaryId: String): String? {
+        return try {
+            val db = getDatabaseForLinkId(linkId)
+            db.proteinMappingDao().getGeneNameFromPrimaryId(primaryId)
+        } catch (e: Exception) {
+            Log.e("ProteinMappingDB", "Error querying gene name for primaryId $primaryId in $linkId", e)
+            null
         }
     }
 

@@ -95,9 +95,18 @@ class ProteinMappingService @Inject constructor(
             return null
         }
 
-        val uniprotEntry = db[primaryId] as? Map<*, *>
-        val geneNames = uniprotEntry?.get("Gene Names") as? String
+        var uniprotEntry = db[primaryId] as? Map<*, *>
+        if (uniprotEntry == null) {
+            for (splitId in primaryId.split(";")) {
+                val trimmedId = splitId.trim()
+                if (trimmedId.isNotEmpty()) {
+                    uniprotEntry = db[trimmedId] as? Map<*, *>
+                    if (uniprotEntry != null) break
+                }
+            }
+        }
 
+        val geneNames = uniprotEntry?.get("Gene Names") as? String
         return geneNames?.replace(" ", ";")?.uppercase()
     }
 
@@ -107,6 +116,10 @@ class ProteinMappingService @Inject constructor(
 
     suspend fun getPrimaryIdsFromSplitId(linkId: String, splitId: String): List<String> {
         return databaseManager.getPrimaryIdsFromSplitId(linkId, splitId)
+    }
+
+    suspend fun getGeneNameFromPrimaryId(linkId: String, primaryId: String): String? {
+        return databaseManager.getGeneNameFromPrimaryId(linkId, primaryId)
     }
 
     suspend fun clearMappingsForLinkId(linkId: String) {

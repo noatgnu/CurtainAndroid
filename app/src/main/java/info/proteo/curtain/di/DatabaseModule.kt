@@ -14,6 +14,7 @@ import info.proteo.curtain.data.local.dao.CurtainCollectionDao
 import info.proteo.curtain.data.local.dao.CurtainDao
 import info.proteo.curtain.data.local.dao.DataFilterListDao
 import info.proteo.curtain.data.local.dao.ProteinSearchListDao
+import info.proteo.curtain.data.local.dao.SavedCrossDatasetSearchDao
 import info.proteo.curtain.data.local.dao.SelectionGroupDao
 import info.proteo.curtain.data.local.dao.SettingsVariantDao
 import info.proteo.curtain.data.local.dao.SiteSettingsDao
@@ -79,6 +80,34 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS saved_cross_dataset_search (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    searchTerms TEXT NOT NULL,
+                    searchType TEXT NOT NULL,
+                    datasetLinkIds TEXT NOT NULL,
+                    significantOnly INTEGER NOT NULL,
+                    useRegex INTEGER NOT NULL,
+                    resultSummariesJson TEXT NOT NULL,
+                    proteinCount INTEGER NOT NULL,
+                    datasetCount INTEGER NOT NULL,
+                    created INTEGER NOT NULL,
+                    lastOpened INTEGER NOT NULL
+                )
+            """)
+        }
+    }
+
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE curtain ADD COLUMN sessionName TEXT")
+            db.execSQL("ALTER TABLE collection_session ADD COLUMN sessionName TEXT")
+        }
+    }
+
     /**
      * Provides the Room database instance.
      * Uses proper migrations to preserve user data across schema changes.
@@ -96,7 +125,7 @@ object DatabaseModule {
             CurtainDatabase::class.java,
             CurtainDatabase.DATABASE_NAME
         )
-            .addMigrations(MIGRATION_5_6)
+            .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -177,5 +206,11 @@ object DatabaseModule {
     @Singleton
     fun provideCurtainCollectionDao(database: CurtainDatabase): CurtainCollectionDao {
         return database.curtainCollectionDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSavedCrossDatasetSearchDao(database: CurtainDatabase): SavedCrossDatasetSearchDao {
+        return database.savedCrossDatasetSearchDao()
     }
 }

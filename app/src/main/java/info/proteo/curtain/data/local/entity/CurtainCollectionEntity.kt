@@ -41,10 +41,12 @@ data class CurtainCollectionEntity(
         Index(value = ["sourceHostname"])
     ]
 )
-data class CollectionSessionEntity(
+data class
+CollectionSessionEntity(
     @PrimaryKey
     val linkId: String,
     val id: Int,
+    val sessionName: String?,
     val description: String,
     val created: Long,
     val curtainType: String?,

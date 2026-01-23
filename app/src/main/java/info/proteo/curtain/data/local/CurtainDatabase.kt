@@ -6,6 +6,7 @@ import info.proteo.curtain.data.local.dao.CurtainCollectionDao
 import info.proteo.curtain.data.local.dao.CurtainDao
 import info.proteo.curtain.data.local.dao.DataFilterListDao
 import info.proteo.curtain.data.local.dao.ProteinSearchListDao
+import info.proteo.curtain.data.local.dao.SavedCrossDatasetSearchDao
 import info.proteo.curtain.data.local.dao.SelectionGroupDao
 import info.proteo.curtain.data.local.dao.SettingsVariantDao
 import info.proteo.curtain.data.local.dao.SiteSettingsDao
@@ -16,6 +17,7 @@ import info.proteo.curtain.data.local.entity.CurtainEntity
 import info.proteo.curtain.data.local.entity.CurtainSiteSettingsEntity
 import info.proteo.curtain.data.local.entity.DataFilterListEntity
 import info.proteo.curtain.data.local.entity.ProteinSearchListEntity
+import info.proteo.curtain.data.local.entity.SavedCrossDatasetSearchEntity
 import info.proteo.curtain.data.local.entity.SelectionGroupEntity
 import info.proteo.curtain.data.local.entity.SettingsVariantEntity
 
@@ -45,6 +47,13 @@ import info.proteo.curtain.data.local.entity.SettingsVariantEntity
  * - CollectionSessionCrossRef: Junction table for collection-session relationships
  * - CollectionSessionEntity now uses linkId as primary key (shared across collections)
  *
+ * Version 7: Saved cross-dataset searches:
+ * - SavedCrossDatasetSearchEntity: Persisted cross-dataset search results
+ *
+ * Version 8: Added session name support:
+ * - CurtainEntity: Added sessionName column for backend name field
+ * - CollectionSessionEntity: Added sessionName column for backend name field
+ *
  * Schema export is enabled for version control and migrations.
  * Schema location is configured in app/build.gradle.kts (ksp.arg).
  */
@@ -58,9 +67,10 @@ import info.proteo.curtain.data.local.entity.SettingsVariantEntity
         SettingsVariantEntity::class,
         CurtainCollectionEntity::class,
         CollectionSessionEntity::class,
-        CollectionSessionCrossRef::class
+        CollectionSessionCrossRef::class,
+        SavedCrossDatasetSearchEntity::class
     ],
-    version = 6,
+    version = 8,
     exportSchema = true
 )
 abstract class CurtainDatabase : RoomDatabase() {
@@ -113,6 +123,13 @@ abstract class CurtainDatabase : RoomDatabase() {
      * @return CurtainCollectionDao instance
      */
     abstract fun curtainCollectionDao(): CurtainCollectionDao
+
+    /**
+     * Data Access Object for saved cross-dataset search operations.
+     *
+     * @return SavedCrossDatasetSearchDao instance
+     */
+    abstract fun savedCrossDatasetSearchDao(): SavedCrossDatasetSearchDao
 
     companion object {
         const val DATABASE_NAME = "curtain_database"

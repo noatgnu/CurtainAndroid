@@ -50,6 +50,9 @@ class CurtainDetailsViewModel @Inject constructor(
     private val _proteinCount = MutableStateFlow(0)
     val proteinCount: StateFlow<Int> = _proteinCount.asStateFlow()
 
+    private val _sessionName = MutableStateFlow<String?>(null)
+    val sessionName: StateFlow<String?> = _sessionName.asStateFlow()
+
     fun loadCurtainData(linkId: String) {
         // Don't reload if already loaded for this linkId
         if (_curtainData.value != null && _isLoading.value == false) {
@@ -70,6 +73,10 @@ class CurtainDetailsViewModel @Inject constructor(
                         _isLoading.value = false
                     }
                     return@launch
+                }
+
+                withContext(Dispatchers.Main) {
+                    _sessionName.value = curtain.sessionName?.takeIf { it.isNotBlank() } ?: curtain.dataDescription
                 }
 
                 if (curtain.file.isNullOrEmpty()) {

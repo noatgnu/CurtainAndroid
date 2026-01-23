@@ -19,8 +19,6 @@ import javax.inject.Singleton
 /**
  * Implementation of CurtainRepository.
  * Manages dataset operations combining local Room database and remote API.
- *
- * Matches iOS CurtainRepository.swift implementation.
  */
 @Singleton
 class CurtainRepositoryImpl @Inject constructor(
@@ -87,58 +85,149 @@ class CurtainRepositoryImpl @Inject constructor(
             )
             val dynamicApiService = retrofit.create(CurtainApiService::class.java)
 
+            onProgress(5, 0.0)
             val initialResponse = dynamicApiService.downloadCurtainData(curtain.linkId)
             val contentType = initialResponse.contentType()?.toString() ?: ""
+            val contentLength = initialResponse.contentLength()
 
-            val responseBodyToDownload = if (contentType.contains("application/json", ignoreCase = true) &&
-                                              initialResponse.contentLength() < 1000) {
-                val responseString = initialResponse.string()
+            android.util.Log.d("CurtainRepo", "Initial response: contentType=$contentType, contentLength=$contentLength")
 
+            val file = File(dataDirectory, "${curtain.linkId}.json")
+            val startTime = System.currentTimeMillis()
+
+            val responseBytes = initialResponse.bytes()
+            val responseString = String(responseBytes, Charsets.UTF_8)
+
+            android.util.Log.d("CurtainRepo", "Response size: ${responseBytes.size} bytes, first 200 chars: ${responseString.take(200)}")
+
+            if (responseString.contains("\"url\"") && responseString.contains("http")) {
                 try {
                     val gson = com.google.gson.Gson()
                     val urlResponse = gson.fromJson(responseString, info.proteo.curtain.data.remote.model.DownloadUrlResponse::class.java)
 
                     if (urlResponse?.url != null && urlResponse.url.startsWith("http")) {
-                        val request = okhttp3.Request.Builder()
-                            .url(urlResponse.url)
-                            .build()
+                        android.util.Log.d("CurtainRepo", "Got presigned URL, downloading from: ${urlResponse.url.take(100)}...")
+                        onProgress(10, 0.0)
 
-                        val response = okHttpClient.newCall(request).execute()
-
-                        if (!response.isSuccessful) {
-                            return@withContext Result.failure(Exception("Download from presigned URL failed: ${response.code}"))
-                        }
-
-                        response.body ?: return@withContext Result.failure(Exception("Empty response body from presigned URL"))
+                        downloadFromPresignedUrl(urlResponse.url, file, onProgress, startTime)
                     } else {
-                        val bytes = responseString.toByteArray(Charsets.UTF_8)
-                        okhttp3.ResponseBody.create(
-                            initialResponse.contentType(),
-                            bytes.size.toLong(),
-                            okio.Buffer().write(bytes)
-                        )
+                        android.util.Log.d("CurtainRepo", "Response is direct JSON data")
+                        file.writeBytes(responseBytes)
+                        onProgress(90, 0.0)
                     }
                 } catch (e: Exception) {
-                    val bytes = responseString.toByteArray(Charsets.UTF_8)
-                    okhttp3.ResponseBody.create(
-                        initialResponse.contentType(),
-                        bytes.size.toLong(),
-                        okio.Buffer().write(bytes)
-                    )
+                    android.util.Log.d("CurtainRepo", "Failed to parse as URL response, treating as direct data: ${e.message}")
+                    file.writeBytes(responseBytes)
+                    onProgress(90, 0.0)
                 }
             } else {
-                initialResponse
+                android.util.Log.d("CurtainRepo", "Response is direct data (no URL field)")
+                file.writeBytes(responseBytes)
+                onProgress(90, 0.0)
             }
 
-            downloadFileFromResponse(responseBodyToDownload, curtain.linkId, onProgress)
-
-            curtainDao.updateFile(curtain.linkId, File(dataDirectory, "${curtain.linkId}.json").absolutePath)
-
+            curtainDao.updateFile(curtain.linkId, file.absolutePath)
             onProgress(100, 0.0)
 
-            Result.success(File(dataDirectory, "${curtain.linkId}.json").absolutePath)
+            android.util.Log.d("CurtainRepo", "Download complete: ${file.absolutePath}, size: ${file.length()}")
+            Result.success(file.absolutePath)
         } catch (e: Exception) {
+            android.util.Log.e("CurtainRepo", "Download failed", e)
             Result.failure(e)
+        }
+    }
+
+    private fun downloadFromPresignedUrl(
+        url: String,
+        file: File,
+        onProgress: (Int, Double) -> Unit,
+        startTime: Long
+    ) {
+        var downloadedBytes = 0L
+        var totalBytes = 0L
+        var lastProgressUpdate = 0L
+        var retryCount = 0
+        val maxRetries = 3
+
+        android.util.Log.d("CurtainRepo", "Starting download from S3")
+
+        while (retryCount <= maxRetries) {
+            try {
+                val connection = java.net.URL(url).openConnection() as javax.net.ssl.HttpsURLConnection
+                connection.connectTimeout = 30000
+                connection.readTimeout = 60000
+
+                if (downloadedBytes > 0) {
+                    connection.setRequestProperty("Range", "bytes=$downloadedBytes-")
+                    android.util.Log.d("CurtainRepo", "Resuming download from byte $downloadedBytes")
+                }
+
+                connection.connect()
+
+                val responseCode = connection.responseCode
+                if (responseCode != 200 && responseCode != 206) {
+                    connection.disconnect()
+                    throw Exception("Download failed: $responseCode ${connection.responseMessage}")
+                }
+
+                if (totalBytes == 0L) {
+                    totalBytes = connection.contentLengthLong + downloadedBytes
+                }
+
+                val appendMode = downloadedBytes > 0
+                java.io.FileOutputStream(file, appendMode).buffered(262144).use { output ->
+                    java.io.BufferedInputStream(connection.inputStream, 262144).use { input ->
+                        val buffer = ByteArray(262144)
+                        var bytesRead: Int
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            downloadedBytes += bytesRead
+
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastProgressUpdate >= 200) {
+                                val progress = if (totalBytes > 0) {
+                                    (10 + downloadedBytes * 80 / totalBytes).toInt().coerceIn(10, 90)
+                                } else {
+                                    ((downloadedBytes / 1024) % 80 + 10).toInt()
+                                }
+
+                                val elapsedTime = (currentTime - startTime) / 1000.0
+                                val speed = if (elapsedTime > 0) (downloadedBytes / 1024.0) / elapsedTime else 0.0
+
+                                android.util.Log.d("CurtainRepo", "Progress: $downloadedBytes / $totalBytes (${progress}%), ${speed.toInt()} KB/s")
+                                onProgress(progress, speed)
+                                lastProgressUpdate = currentTime
+                            }
+                        }
+                    }
+                }
+
+                connection.disconnect()
+                android.util.Log.d("CurtainRepo", "Download complete: $downloadedBytes bytes")
+                return
+
+            } catch (e: javax.net.ssl.SSLException) {
+                retryCount++
+                android.util.Log.w("CurtainRepo", "SSL error after $downloadedBytes bytes, retry $retryCount/$maxRetries: ${e.message}")
+                if (retryCount > maxRetries) {
+                    if (downloadedBytes > 0 && totalBytes > 0 && downloadedBytes >= totalBytes * 0.99) {
+                        android.util.Log.w("CurtainRepo", "Download 99%+ complete, keeping partial file")
+                        return
+                    }
+                    file.delete()
+                    throw Exception("SSL error during download after $retryCount retries: ${e.message}", e)
+                }
+                Thread.sleep(1000)
+            } catch (e: java.io.IOException) {
+                retryCount++
+                android.util.Log.w("CurtainRepo", "IO error after $downloadedBytes bytes, retry $retryCount/$maxRetries: ${e.message}")
+                if (retryCount > maxRetries) {
+                    file.delete()
+                    throw Exception("Download failed after $retryCount retries: ${e.message}", e)
+                }
+                Thread.sleep(1000)
+            }
         }
     }
 
@@ -147,42 +236,20 @@ class CurtainRepositoryImpl @Inject constructor(
         linkId: String,
         onProgress: (Int, Double) -> Unit
     ) {
-        val totalBytes = responseBody.contentLength()
-        val file = File(dataDirectory, "$linkId.json")
-        var downloadedBytes = 0L
         val startTime = System.currentTimeMillis()
-        var lastProgressUpdate = 0L
+        val file = File(dataDirectory, "$linkId.json")
 
-        FileOutputStream(file).buffered(65536).use { output ->
-            responseBody.byteStream().use { input ->
-                val buffer = ByteArray(8192)
-                var bytesRead: Int
+        onProgress(20, 0.0)
 
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    output.write(buffer, 0, bytesRead)
-                    downloadedBytes += bytesRead
+        val bytes = responseBody.bytes()
 
-                    val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastProgressUpdate >= 250) {
-                        val progress = if (totalBytes > 0) {
-                            (downloadedBytes * 100 / totalBytes).toInt().coerceIn(0, 100)
-                        } else {
-                            -1
-                        }
+        onProgress(80, 0.0)
 
-                        val elapsedTime = (currentTime - startTime) / 1000.0
-                        val speed = if (elapsedTime > 0) {
-                            (downloadedBytes / 1024.0) / elapsedTime
-                        } else {
-                            0.0
-                        }
+        file.writeBytes(bytes)
 
-                        onProgress(progress, speed)
-                        lastProgressUpdate = currentTime
-                    }
-                }
-            }
-        }
+        val elapsedTime = (System.currentTimeMillis() - startTime) / 1000.0
+        val speed = if (elapsedTime > 0) (bytes.size / 1024.0) / elapsedTime else 0.0
+        android.util.Log.d("CurtainRepo", "Downloaded ${bytes.size} bytes in ${elapsedTime}s (${speed.toInt()} KB/s)")
     }
 
     override suspend fun insertCurtain(curtain: CurtainEntity) {
@@ -249,6 +316,7 @@ class CurtainRepositoryImpl @Inject constructor(
                 created = parseIsoDateToMillis(dto.created),
                 updated = System.currentTimeMillis(),
                 file = null,
+                sessionName = dto.name,
                 dataDescription = dto.description,
                 enable = dto.enable,
                 curtainType = dto.curtainType,

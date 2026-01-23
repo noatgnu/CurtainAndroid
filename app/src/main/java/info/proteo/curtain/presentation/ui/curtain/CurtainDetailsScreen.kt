@@ -52,12 +52,31 @@ fun CurtainDetailsScreen(
     navController: NavController,
     viewModel: CurtainDetailsViewModel = hiltViewModel()
 ) {
+    CurtainDetailsSharedContent(
+        linkId = linkId,
+        navController = navController,
+        viewModel = viewModel,
+        onBack = { navController.navigateUp() },
+        useCloseIcon = false
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CurtainDetailsSharedContent(
+    linkId: String,
+    navController: NavController,
+    viewModel: CurtainDetailsViewModel = hiltViewModel(),
+    onBack: () -> Unit,
+    useCloseIcon: Boolean = false
+) {
     val curtainData by viewModel.curtainData.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val mappingProgress by viewModel.mappingProgress.collectAsState()
     val loadingStatus by viewModel.loadingStatus.collectAsState()
     val proteinCount by viewModel.proteinCount.collectAsState()
+    val sessionName by viewModel.sessionName.collectAsState()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showMenu by remember { mutableStateOf(false) }
@@ -84,10 +103,13 @@ fun CurtainDetailsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dataset Details") },
+                title = { Text(sessionName ?: "Dataset Details") },
                 navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            if (useCloseIcon) Icons.Default.Close else Icons.Default.ArrowBack,
+                            contentDescription = if (useCloseIcon) "Close" else "Back"
+                        )
                     }
                 },
                 actions = {

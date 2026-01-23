@@ -6,7 +6,10 @@ import androidx.room.Index
 @Entity(
     tableName = "gene_name_mapping",
     primaryKeys = ["geneName", "primaryId"],
-    indices = [Index(value = ["geneName"])]
+    indices = [
+        Index(value = ["geneName"]),
+        Index(value = ["primaryId"])
+    ]
 )
 data class GeneNameMappingEntity(
     val geneName: String,

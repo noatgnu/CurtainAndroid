@@ -29,6 +29,7 @@ data class CurtainEntity(
     val created: Long,
     val updated: Long,
     val file: String?,
+    val sessionName: String?,
     val dataDescription: String,
     val enable: Boolean,
     val curtainType: String,

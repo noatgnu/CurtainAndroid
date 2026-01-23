@@ -13,7 +13,7 @@ import info.proteo.curtain.data.local.entity.ProteinMappingMetadataEntity
         GeneNameMappingEntity::class,
         ProteinMappingMetadataEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class ProteinMappingDatabase : RoomDatabase() {

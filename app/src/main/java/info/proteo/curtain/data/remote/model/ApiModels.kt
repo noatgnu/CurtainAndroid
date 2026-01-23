@@ -23,6 +23,9 @@ data class CurtainDto(
     @SerializedName("enable")
     val enable: Boolean,
 
+    @SerializedName("name")
+    val name: String?,
+
     @SerializedName("description")
     val description: String,
 
@@ -135,6 +138,9 @@ data class AccessibleCurtainDto(
 
     @SerializedName("link_id")
     val linkId: String,
+
+    @SerializedName("name")
+    val name: String?,
 
     @SerializedName("description")
     val description: String,

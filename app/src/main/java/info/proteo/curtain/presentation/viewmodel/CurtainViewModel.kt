@@ -52,6 +52,12 @@ class CurtainViewModel @Inject constructor(
     private val _isLoadingCollections = MutableStateFlow(false)
     val isLoadingCollections: StateFlow<Boolean> = _isLoadingCollections.asStateFlow()
 
+    private val _selectedSessionIds = MutableStateFlow<Map<Long, Set<String>>>(emptyMap())
+    val selectedSessionIds: StateFlow<Map<Long, Set<String>>> = _selectedSessionIds.asStateFlow()
+
+    private val _selectionModeCollectionId = MutableStateFlow<Long?>(null)
+    val selectionModeCollectionId: StateFlow<Long?> = _selectionModeCollectionId.asStateFlow()
+
     /**
      * Curtains list combined with search query.
      * Automatically filters results when search query changes.
@@ -293,6 +299,7 @@ class CurtainViewModel @Inject constructor(
                 created = java.util.Date().time,
                 updated = java.util.Date().time,
                 file = filePath,
+                sessionName = null,
                 dataDescription = "DOI: $doi",
                 enable = true,
                 curtainType = "DOI",
@@ -434,5 +441,70 @@ class CurtainViewModel @Inject constructor(
             apiUrl = collection.sourceHostname,
             frontendUrl = collection.frontendURL
         )
+    }
+
+    fun enterSelectionMode(collectionLocalId: Long) {
+        _selectionModeCollectionId.value = collectionLocalId
+        _selectedSessionIds.value = _selectedSessionIds.value.toMutableMap().apply {
+            put(collectionLocalId, emptySet())
+        }
+    }
+
+    fun exitSelectionMode() {
+        val collectionId = _selectionModeCollectionId.value
+        _selectionModeCollectionId.value = null
+        if (collectionId != null) {
+            _selectedSessionIds.value = _selectedSessionIds.value.toMutableMap().apply {
+                remove(collectionId)
+            }
+        }
+    }
+
+    fun toggleSessionSelection(collectionLocalId: Long, linkId: String) {
+        _selectedSessionIds.value = _selectedSessionIds.value.toMutableMap().apply {
+            val currentSet = get(collectionLocalId) ?: emptySet()
+            put(collectionLocalId, if (currentSet.contains(linkId)) {
+                currentSet - linkId
+            } else {
+                currentSet + linkId
+            })
+        }
+    }
+
+    fun selectAllSessions(collectionLocalId: Long) {
+        val sessions = _collectionSessions.value[collectionLocalId] ?: return
+        _selectedSessionIds.value = _selectedSessionIds.value.toMutableMap().apply {
+            put(collectionLocalId, sessions.map { it.linkId }.toSet())
+        }
+    }
+
+    fun deselectAllSessions(collectionLocalId: Long) {
+        _selectedSessionIds.value = _selectedSessionIds.value.toMutableMap().apply {
+            put(collectionLocalId, emptySet())
+        }
+    }
+
+    fun downloadSelectedSessions(collectionLocalId: Long) {
+        val collection = viewModelScope.launch {
+            val collection = collectionRepository.getCollectionByLocalId(collectionLocalId) ?: return@launch
+            val selectedIds = _selectedSessionIds.value[collectionLocalId] ?: return@launch
+            val sessions = _collectionSessions.value[collectionLocalId] ?: return@launch
+
+            val sessionsToDownload = sessions.filter { selectedIds.contains(it.linkId) }
+
+            sessionsToDownload.forEach { session ->
+                loadCurtain(
+                    linkId = session.linkId,
+                    apiUrl = collection.sourceHostname,
+                    frontendUrl = collection.frontendURL
+                )
+            }
+
+            exitSelectionMode()
+        }
+    }
+
+    fun getSelectedCount(collectionLocalId: Long): Int {
+        return _selectedSessionIds.value[collectionLocalId]?.size ?: 0
     }
 }

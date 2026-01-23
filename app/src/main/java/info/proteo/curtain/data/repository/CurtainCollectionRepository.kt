@@ -52,6 +52,7 @@ class CurtainCollectionRepository @Inject constructor(
                 CollectionSessionEntity(
                     linkId = curtain.linkId,
                     id = curtain.id,
+                    sessionName = curtain.name,
                     description = curtain.description,
                     created = parseDate(curtain.created),
                     curtainType = curtain.curtainType,
@@ -86,6 +87,7 @@ class CurtainCollectionRepository @Inject constructor(
                         CollectionSessionEntity(
                             linkId = curtain.linkId,
                             id = curtain.id,
+                            sessionName = curtain.name,
                             description = curtain.description,
                             created = parseDate(curtain.created),
                             curtainType = curtain.curtainType,
@@ -118,6 +120,7 @@ class CurtainCollectionRepository @Inject constructor(
                 CollectionSessionEntity(
                     linkId = curtain.linkId,
                     id = curtain.id,
+                    sessionName = curtain.name,
                     description = curtain.description,
                     created = parseDate(curtain.created),
                     curtainType = curtain.curtainType,
@@ -161,7 +164,7 @@ class CurtainCollectionRepository @Inject constructor(
             description = dto.description,
             enable = dto.enable,
             ownerUsername = dto.ownerUsername,
-            curtainCount = dto.curtainCount,
+            curtainCount = dto.accessibleCurtains.size,
             created = parseDate(dto.created),
             updated = parseDate(dto.updated),
             sourceHostname = hostname,

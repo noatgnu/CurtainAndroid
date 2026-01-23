@@ -21,9 +21,11 @@ class ProteomicsDataDatabaseManager @Inject constructor(
     }
 
     suspend fun getDatabaseForLinkId(linkId: String): ProteomicsDataDatabase {
+        val isNew = !databases.containsKey(linkId)
         return databases.getOrPut(linkId) {
             val dbName = "proteomics_data_${linkId}.db"
-            Log.d("ProteomicsDataDB", "Creating/opening database: $dbName")
+            val dbFile = context.getDatabasePath(dbName)
+            Log.d("ProteomicsDataDB", "Creating/opening database: $dbName, exists=${dbFile.exists()}, size=${if(dbFile.exists()) dbFile.length() else 0}")
             Room.databaseBuilder(
                 context,
                 ProteomicsDataDatabase::class.java,
@@ -31,6 +33,10 @@ class ProteomicsDataDatabaseManager @Inject constructor(
             )
                 .fallbackToDestructiveMigration()
                 .build()
+        }.also {
+            if (isNew) {
+                Log.d("ProteomicsDataDB", "Database instance created for first time in this session for $linkId")
+            }
         }
     }
 

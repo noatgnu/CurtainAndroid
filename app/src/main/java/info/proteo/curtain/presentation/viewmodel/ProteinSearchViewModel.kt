@@ -17,6 +17,7 @@ import info.proteo.curtain.domain.repository.ProteinSearchListRepository
 import info.proteo.curtain.domain.service.ProteinSearchService
 import info.proteo.curtain.domain.service.SearchType
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,7 +30,7 @@ class ProteinSearchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val curtainLinkId: String = checkNotNull(savedStateHandle["linkId"])
+    private val _curtainLinkId = MutableStateFlow(savedStateHandle.get<String>("linkId") ?: "")
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -105,19 +106,24 @@ class ProteinSearchViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    val searchLists: StateFlow<List<ProteinSearchList>> = searchListRepository
-        .getSearchListsByCurtainId(curtainLinkId)
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val searchLists: StateFlow<List<ProteinSearchList>> = _curtainLinkId.flatMapLatest { linkId ->
+        if (linkId.isNotEmpty()) {
+            searchListRepository.getSearchListsByCurtainId(linkId)
+        } else {
+            flowOf(emptyList())
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     private val _selectedSearchListId = MutableStateFlow<String?>(null)
     val selectedSearchListId: StateFlow<String?> = _selectedSearchListId.asStateFlow()
 
     fun setCurtainData(data: CurtainData) {
         _curtainData.value = data
+        _curtainLinkId.value = data.linkId
         viewModelScope.launch {
             updateSuggestionsForSearchType()
         }
@@ -293,9 +299,14 @@ class ProteinSearchViewModel @Inject constructor(
     fun saveSearchList(name: String, description: String = "") {
         viewModelScope.launch {
             try {
+                val linkId = _curtainLinkId.value
+                if (linkId.isEmpty()) {
+                    _error.value = "Cannot save search list: no dataset selected"
+                    return@launch
+                }
                 val proteinIds = _searchResults.value.map { it.proteinId }
                 searchListRepository.createSearchList(
-                    curtainLinkId = curtainLinkId,
+                    curtainLinkId = linkId,
                     name = name,
                     proteinIds = proteinIds,
                     description = description

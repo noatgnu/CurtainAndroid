@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -115,6 +119,8 @@ fun CurtainListScreen(
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val expandedCollectionIds by viewModel.expandedCollectionIds.collectAsState()
     val collectionSessions by viewModel.collectionSessions.collectAsState()
+    val selectedSessionIds by viewModel.selectedSessionIds.collectAsState()
+    val selectionModeCollectionId by viewModel.selectionModeCollectionId.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -239,6 +245,8 @@ fun CurtainListScreen(
                         isLoading = isLoadingCollections,
                         expandedCollectionIds = expandedCollectionIds,
                         collectionSessions = collectionSessions,
+                        selectedSessionIds = selectedSessionIds,
+                        selectionModeCollectionId = selectionModeCollectionId,
                         onToggleExpand = { viewModel.toggleCollectionExpanded(it) },
                         onRefresh = { viewModel.refreshCollection(it) },
                         onDelete = { collection ->
@@ -248,7 +256,15 @@ fun CurtainListScreen(
                         onSessionClick = { session, collection ->
                             viewModel.loadSessionFromCollection(session, collection)
                         },
-                        onLoadExample = { viewModel.loadExampleCollection() }
+                        onLoadExample = { viewModel.loadExampleCollection() },
+                        onEnterSelectionMode = { viewModel.enterSelectionMode(it) },
+                        onExitSelectionMode = { viewModel.exitSelectionMode() },
+                        onToggleSessionSelection = { collectionId, linkId ->
+                            viewModel.toggleSessionSelection(collectionId, linkId)
+                        },
+                        onSelectAll = { viewModel.selectAllSessions(it) },
+                        onDeselectAll = { viewModel.deselectAllSessions(it) },
+                        onDownloadSelected = { viewModel.downloadSelectedSessions(it) }
                     )
                 }
             }
@@ -267,7 +283,7 @@ fun CurtainListScreen(
 
         if (showDeleteDialog && curtainToDelete != null) {
             DeleteConfirmationDialog(
-                curtainDescription = curtainToDelete!!.dataDescription,
+                curtainDescription = curtainToDelete!!.sessionName?.takeIf { it.isNotBlank() } ?: curtainToDelete!!.dataDescription,
                 onDismiss = { showDeleteDialog = false },
                 onConfirm = {
                     viewModel.deleteCurtain(curtainToDelete!!)
@@ -360,11 +376,19 @@ private fun CollectionsTab(
     isLoading: Boolean,
     expandedCollectionIds: Set<Long>,
     collectionSessions: Map<Long, List<CollectionSessionEntity>>,
+    selectedSessionIds: Map<Long, Set<String>>,
+    selectionModeCollectionId: Long?,
     onToggleExpand: (Long) -> Unit,
     onRefresh: (Long) -> Unit,
     onDelete: (CurtainCollectionEntity) -> Unit,
     onSessionClick: (CollectionSessionEntity, CurtainCollectionEntity) -> Unit,
-    onLoadExample: () -> Unit
+    onLoadExample: () -> Unit,
+    onEnterSelectionMode: (Long) -> Unit,
+    onExitSelectionMode: () -> Unit,
+    onToggleSessionSelection: (Long, String) -> Unit,
+    onSelectAll: (Long) -> Unit,
+    onDeselectAll: (Long) -> Unit,
+    onDownloadSelected: (Long) -> Unit
 ) {
     when {
         isLoading && collections.isEmpty() -> {
@@ -383,14 +407,28 @@ private fun CollectionsTab(
         else -> {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(collections, key = { it.localId }) { collection ->
+                    val isInSelectionMode = selectionModeCollectionId == collection.localId
+                    val selectedIds = selectedSessionIds[collection.localId] ?: emptySet()
+                    val sessions = collectionSessions[collection.localId] ?: emptyList()
+
                     CollectionItem(
                         collection = collection,
                         isExpanded = expandedCollectionIds.contains(collection.localId),
-                        sessions = collectionSessions[collection.localId] ?: emptyList(),
+                        sessions = sessions,
+                        isInSelectionMode = isInSelectionMode,
+                        selectedSessionIds = selectedIds,
                         onToggleExpand = { onToggleExpand(collection.localId) },
                         onRefresh = { onRefresh(collection.localId) },
                         onDelete = { onDelete(collection) },
-                        onSessionClick = { session -> onSessionClick(session, collection) }
+                        onSessionClick = { session -> onSessionClick(session, collection) },
+                        onEnterSelectionMode = { onEnterSelectionMode(collection.localId) },
+                        onExitSelectionMode = onExitSelectionMode,
+                        onToggleSessionSelection = { linkId ->
+                            onToggleSessionSelection(collection.localId, linkId)
+                        },
+                        onSelectAll = { onSelectAll(collection.localId) },
+                        onDeselectAll = { onDeselectAll(collection.localId) },
+                        onDownloadSelected = { onDownloadSelected(collection.localId) }
                     )
                 }
             }
@@ -403,12 +441,21 @@ private fun CollectionItem(
     collection: CurtainCollectionEntity,
     isExpanded: Boolean,
     sessions: List<CollectionSessionEntity>,
+    isInSelectionMode: Boolean,
+    selectedSessionIds: Set<String>,
     onToggleExpand: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
-    onSessionClick: (CollectionSessionEntity) -> Unit
+    onSessionClick: (CollectionSessionEntity) -> Unit,
+    onEnterSelectionMode: () -> Unit,
+    onExitSelectionMode: () -> Unit,
+    onToggleSessionSelection: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    onDownloadSelected: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val allSelected = sessions.isNotEmpty() && selectedSessionIds.size == sessions.size
 
     Card(
         modifier = Modifier
@@ -484,6 +531,16 @@ private fun CollectionItem(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Download Multiple") },
+                                onClick = {
+                                    showMenu = false
+                                    onEnterSelectionMode()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.SelectAll, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Refresh") },
                                 onClick = {
                                     onRefresh()
@@ -525,6 +582,47 @@ private fun CollectionItem(
                     modifier = Modifier.padding(top = 8.dp)
                 ) {
                     HorizontalDivider()
+
+                    if (isInSelectionMode) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onExitSelectionMode) {
+                                    Icon(Icons.Default.Close, contentDescription = "Cancel")
+                                }
+                                Text(
+                                    text = "${selectedSessionIds.size} selected",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Row {
+                                TextButton(
+                                    onClick = { if (allSelected) onDeselectAll() else onSelectAll() }
+                                ) {
+                                    Text(if (allSelected) "Deselect All" else "Select All")
+                                }
+                                Button(
+                                    onClick = onDownloadSelected,
+                                    enabled = selectedSessionIds.isNotEmpty()
+                                ) {
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Download")
+                                }
+                            }
+                        }
+                        HorizontalDivider()
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
                     if (sessions.isEmpty()) {
                         Text(
@@ -537,7 +635,16 @@ private fun CollectionItem(
                         sessions.forEach { session ->
                             CollectionSessionItem(
                                 session = session,
-                                onClick = { onSessionClick(session) }
+                                isInSelectionMode = isInSelectionMode,
+                                isSelected = selectedSessionIds.contains(session.linkId),
+                                onClick = {
+                                    if (isInSelectionMode) {
+                                        onToggleSessionSelection(session.linkId)
+                                    } else {
+                                        onSessionClick(session)
+                                    }
+                                },
+                                onToggleSelection = { onToggleSessionSelection(session.linkId) }
                             )
                         }
                     }
@@ -550,19 +657,35 @@ private fun CollectionItem(
 @Composable
 private fun CollectionSessionItem(
     session: CollectionSessionEntity,
-    onClick: () -> Unit
+    isInSelectionMode: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onToggleSelection: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(start = 36.dp, top = 4.dp, bottom = 4.dp, end = 8.dp),
+            .padding(start = if (isInSelectionMode) 8.dp else 36.dp, top = 4.dp, bottom = 4.dp, end = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (isInSelectionMode) {
+            IconButton(
+                onClick = onToggleSelection,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                    contentDescription = if (isSelected) "Deselect" else "Select",
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = session.description.ifBlank { session.linkId },
+                text = session.sessionName?.takeIf { it.isNotBlank() } ?: session.description.ifBlank { session.linkId },
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -583,12 +706,14 @@ private fun CollectionSessionItem(
                 }
             }
         }
-        Icon(
-            imageVector = Icons.Default.Download,
-            contentDescription = "Load session",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp)
-        )
+        if (!isInSelectionMode) {
+            Icon(
+                imageVector = Icons.Default.Download,
+                contentDescription = "Load session",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
@@ -718,7 +843,7 @@ private fun CurtainItem(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = curtain.dataDescription,
+                        text = curtain.sessionName?.takeIf { it.isNotBlank() } ?: curtain.dataDescription,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium
                     )

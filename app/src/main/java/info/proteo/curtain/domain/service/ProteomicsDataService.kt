@@ -23,8 +23,12 @@ class ProteomicsDataService @Inject constructor(
 ) {
 
     suspend fun loadCurtainDataFromDatabase(linkId: String): CurtainData? {
+        Log.d("ProteomicsDataService", "loadCurtainDataFromDatabase called for linkId=$linkId")
         val db = databaseManager.getDatabaseForLinkId(linkId)
-        val metadataEntity = db.proteomicsDataDao().getCurtainMetadata() ?: return null
+        Log.d("ProteomicsDataService", "Got database instance for linkId=$linkId")
+        val metadataEntity = db.proteomicsDataDao().getCurtainMetadata()
+        Log.d("ProteomicsDataService", "Metadata entity: ${if (metadataEntity != null) "found" else "NOT FOUND"}")
+        if (metadataEntity == null) return null
 
         val settings = gson.fromJson(metadataEntity.settingsJson, info.proteo.curtain.domain.model.CurtainSettings::class.java)
 

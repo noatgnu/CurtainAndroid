@@ -20,11 +20,14 @@ interface ProteinMappingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGeneNameMappings(mappings: List<GeneNameMappingEntity>)
 
-    @Query("SELECT DISTINCT primaryId FROM primary_id_mapping WHERE splitId = :splitId")
+    @Query("SELECT DISTINCT primaryId FROM primary_id_mapping WHERE splitId = :splitId COLLATE NOCASE")
     suspend fun getPrimaryIdsFromSplitId(splitId: String): List<String>
 
-    @Query("SELECT DISTINCT primaryId FROM gene_name_mapping WHERE geneName = :geneName")
+    @Query("SELECT DISTINCT primaryId FROM gene_name_mapping WHERE geneName = :geneName COLLATE NOCASE")
     suspend fun getPrimaryIdsFromGeneName(geneName: String): List<String>
+
+    @Query("SELECT DISTINCT geneName FROM gene_name_mapping WHERE primaryId = :primaryId LIMIT 1")
+    suspend fun getGeneNameFromPrimaryId(primaryId: String): String?
 
     @Query("DELETE FROM primary_id_mapping")
     suspend fun deletePrimaryIdMappings()
