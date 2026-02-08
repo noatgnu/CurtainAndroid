@@ -7,9 +7,7 @@ if (typeof Plotly === 'undefined') {
     }
 } else {
     Plotly.setPlotConfig({
-        displayModeBar: true,
-        displaylogo: false,
-        modeBarButtonsToRemove: ['sendDataToCloud', 'editInChartStudio']
+        displayModeBar: false
     });
 
     const plotData = {{PLOT_DATA}};
@@ -479,6 +477,28 @@ if (typeof Plotly === 'undefined') {
             if (dims && window.AndroidBridge) {
                 window.AndroidBridge.onPlotDimensions(JSON.stringify(dims));
             }
+        },
+
+        exportPlot: function(format, filename) {
+            if (!currentPlot) return;
+            var plotDiv = document.getElementById('plot');
+            Plotly.toImage(plotDiv, {
+                format: format,
+                width: plotDiv.offsetWidth || 1200,
+                height: plotDiv.offsetHeight || 800
+            }).then(function(dataUrl) {
+                if (window.AndroidBridge) {
+                    window.AndroidBridge.onImageExported(JSON.stringify({
+                        format: format,
+                        filename: filename || 'volcano_plot',
+                        dataUrl: dataUrl
+                    }));
+                }
+            }).catch(function(error) {
+                if (window.AndroidBridge) {
+                    window.AndroidBridge.onPlotError('Export failed: ' + error.message);
+                }
+            });
         },
 
         convertAndSendCoordinates: function(annotations) {

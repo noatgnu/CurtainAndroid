@@ -1,93 +1,22 @@
 package info.proteo.curtain.presentation.ui.curtain
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import info.proteo.curtain.data.local.entity.CollectionSessionEntity
 import info.proteo.curtain.data.local.entity.CurtainCollectionEntity
 import info.proteo.curtain.data.local.entity.CurtainEntity
+import info.proteo.curtain.presentation.ui.components.CurtainListMode
+import info.proteo.curtain.presentation.ui.components.CurtainListPanel
 import info.proteo.curtain.presentation.ui.dialogs.AddCurtainDialog
 import info.proteo.curtain.presentation.viewmodel.CurtainViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Curtain list screen with search and item actions.
@@ -121,10 +50,10 @@ fun CurtainListScreen(
     val collectionSessions by viewModel.collectionSessions.collectAsState()
     val selectedSessionIds by viewModel.selectedSessionIds.collectAsState()
     val selectionModeCollectionId by viewModel.selectionModeCollectionId.collectAsState()
+    val curtainTypeFilter by viewModel.curtainTypeFilter.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var showEditDialog by remember { mutableStateOf(false) }
     var curtainToEdit by remember { mutableStateOf<CurtainEntity?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -134,8 +63,6 @@ fun CurtainListScreen(
     var showAddCurtainDialog by remember { mutableStateOf(false) }
     var showAddMenu by remember { mutableStateOf(false) }
     var showThemeSettings by remember { mutableStateOf(false) }
-
-    val tabTitles = listOf("Sessions", "Collections")
 
     LaunchedEffect(error) {
         error?.let {
@@ -191,83 +118,62 @@ fun CurtainListScreen(
             },
             snackbarHost = { SnackbarHost(snackbarHostState) }
         ) { paddingValues ->
-            Column(
+            CurtainListPanel(
+                mode = CurtainListMode.MANAGEMENT,
+                datasets = curtains,
+                collections = collections,
+                expandedCollectionIds = expandedCollectionIds,
+                collectionSessions = collectionSessions,
+                isLoading = isLoading,
+                isLoadingCollections = isLoadingCollections,
+                searchQuery = searchQuery,
+                onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                onDatasetClick = { curtain ->
+                    if (curtain.file != null) {
+                        navController.navigate("curtain_details/${curtain.linkId}")
+                    }
+                },
+                downloadProgress = downloadProgress,
+                onDownload = { viewModel.downloadCurtain(it) },
+                onTogglePin = { viewModel.togglePin(it) },
+                onEdit = { curtain ->
+                    curtainToEdit = curtain
+                    showEditDialog = true
+                },
+                onRedownload = { viewModel.downloadCurtain(it) },
+                onDeleteDataset = { curtain ->
+                    curtainToDelete = curtain
+                    showDeleteDialog = true
+                },
+                onToggleCollectionExpanded = { viewModel.toggleCollectionExpanded(it) },
+                onRefreshCollection = { viewModel.refreshCollection(it) },
+                onDeleteCollection = { collection ->
+                    collectionToDelete = collection
+                    showDeleteCollectionDialog = true
+                },
+                onSessionClick = { session, collection ->
+                    viewModel.loadSessionFromCollection(session, collection)
+                },
+                selectionModeCollectionId = selectionModeCollectionId,
+                selectedSessionIdsInCollection = selectedSessionIds,
+                onEnterSelectionMode = { viewModel.enterSelectionMode(it) },
+                onExitSelectionMode = { viewModel.exitSelectionMode() },
+                onToggleSessionSelectionInCollection = { collectionId, linkId ->
+                    viewModel.toggleSessionSelection(collectionId, linkId)
+                },
+                onSelectAllInCollection = { viewModel.selectAllSessions(it) },
+                onDeselectAllInCollection = { viewModel.deselectAllSessions(it) },
+                onDownloadSelectedInCollection = { viewModel.downloadSelectedSessions(it) },
+                onLoadExample = { viewModel.loadExampleCurtain() },
+                onLoadPTMExample = { viewModel.loadExamplePTMCurtain() },
+                onLoadBothExamples = { viewModel.loadBothExampleCurtains() },
+                onLoadExampleCollection = { viewModel.loadExampleCollection() },
+                curtainTypeFilter = curtainTypeFilter,
+                onCurtainTypeFilterChange = { viewModel.updateCurtainTypeFilter(it) },
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-            ) {
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { viewModel.updateSearchQuery(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    placeholder = { Text("Search datasets...") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                    singleLine = true
-                )
-
-                TabRow(selectedTabIndex = selectedTabIndex) {
-                    tabTitles.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = { Text(title) }
-                        )
-                    }
-                }
-
-                when (selectedTabIndex) {
-                    0 -> SessionsTab(
-                        curtains = curtains,
-                        isLoading = isLoading,
-                        downloadProgress = downloadProgress,
-                        onDownload = { viewModel.downloadCurtain(it) },
-                        onTogglePin = { viewModel.togglePin(it) },
-                        onEdit = { curtain ->
-                            curtainToEdit = curtain
-                            showEditDialog = true
-                        },
-                        onRedownload = { viewModel.downloadCurtain(it) },
-                        onDelete = { curtain ->
-                            curtainToDelete = curtain
-                            showDeleteDialog = true
-                        },
-                        onClick = { curtain ->
-                            if (curtain.file != null) {
-                                navController.navigate("curtain_details/${curtain.linkId}")
-                            }
-                        },
-                        onLoadExample = { viewModel.loadExampleCurtain() }
-                    )
-                    1 -> CollectionsTab(
-                        collections = collections,
-                        isLoading = isLoadingCollections,
-                        expandedCollectionIds = expandedCollectionIds,
-                        collectionSessions = collectionSessions,
-                        selectedSessionIds = selectedSessionIds,
-                        selectionModeCollectionId = selectionModeCollectionId,
-                        onToggleExpand = { viewModel.toggleCollectionExpanded(it) },
-                        onRefresh = { viewModel.refreshCollection(it) },
-                        onDelete = { collection ->
-                            collectionToDelete = collection
-                            showDeleteCollectionDialog = true
-                        },
-                        onSessionClick = { session, collection ->
-                            viewModel.loadSessionFromCollection(session, collection)
-                        },
-                        onLoadExample = { viewModel.loadExampleCollection() },
-                        onEnterSelectionMode = { viewModel.enterSelectionMode(it) },
-                        onExitSelectionMode = { viewModel.exitSelectionMode() },
-                        onToggleSessionSelection = { collectionId, linkId ->
-                            viewModel.toggleSessionSelection(collectionId, linkId)
-                        },
-                        onSelectAll = { viewModel.selectAllSessions(it) },
-                        onDeselectAll = { viewModel.deselectAllSessions(it) },
-                        onDownloadSelected = { viewModel.downloadSelectedSessions(it) }
-                    )
-                }
-            }
+            )
         }
 
         if (showEditDialog && curtainToEdit != null) {
@@ -325,441 +231,6 @@ fun CurtainListScreen(
     }
 
 @Composable
-private fun SessionsTab(
-    curtains: List<CurtainEntity>,
-    isLoading: Boolean,
-    downloadProgress: Map<String, Int>,
-    onDownload: (CurtainEntity) -> Unit,
-    onTogglePin: (CurtainEntity) -> Unit,
-    onEdit: (CurtainEntity) -> Unit,
-    onRedownload: (CurtainEntity) -> Unit,
-    onDelete: (CurtainEntity) -> Unit,
-    onClick: (CurtainEntity) -> Unit,
-    onLoadExample: () -> Unit
-) {
-    when {
-        isLoading && curtains.isEmpty() -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-
-        curtains.isEmpty() -> {
-            EmptyState(onLoadExample = onLoadExample)
-        }
-
-        else -> {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(curtains, key = { it.linkId }) { curtain ->
-                    CurtainItem(
-                        curtain = curtain,
-                        downloadProgress = downloadProgress[curtain.linkId],
-                        onDownload = { onDownload(curtain) },
-                        onTogglePin = { onTogglePin(curtain) },
-                        onEdit = { onEdit(curtain) },
-                        onRedownload = { onRedownload(curtain) },
-                        onDelete = { onDelete(curtain) },
-                        onClick = { onClick(curtain) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CollectionsTab(
-    collections: List<CurtainCollectionEntity>,
-    isLoading: Boolean,
-    expandedCollectionIds: Set<Long>,
-    collectionSessions: Map<Long, List<CollectionSessionEntity>>,
-    selectedSessionIds: Map<Long, Set<String>>,
-    selectionModeCollectionId: Long?,
-    onToggleExpand: (Long) -> Unit,
-    onRefresh: (Long) -> Unit,
-    onDelete: (CurtainCollectionEntity) -> Unit,
-    onSessionClick: (CollectionSessionEntity, CurtainCollectionEntity) -> Unit,
-    onLoadExample: () -> Unit,
-    onEnterSelectionMode: (Long) -> Unit,
-    onExitSelectionMode: () -> Unit,
-    onToggleSessionSelection: (Long, String) -> Unit,
-    onSelectAll: (Long) -> Unit,
-    onDeselectAll: (Long) -> Unit,
-    onDownloadSelected: (Long) -> Unit
-) {
-    when {
-        isLoading && collections.isEmpty() -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-
-        collections.isEmpty() -> {
-            CollectionsEmptyState(onLoadExample = onLoadExample)
-        }
-
-        else -> {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(collections, key = { it.localId }) { collection ->
-                    val isInSelectionMode = selectionModeCollectionId == collection.localId
-                    val selectedIds = selectedSessionIds[collection.localId] ?: emptySet()
-                    val sessions = collectionSessions[collection.localId] ?: emptyList()
-
-                    CollectionItem(
-                        collection = collection,
-                        isExpanded = expandedCollectionIds.contains(collection.localId),
-                        sessions = sessions,
-                        isInSelectionMode = isInSelectionMode,
-                        selectedSessionIds = selectedIds,
-                        onToggleExpand = { onToggleExpand(collection.localId) },
-                        onRefresh = { onRefresh(collection.localId) },
-                        onDelete = { onDelete(collection) },
-                        onSessionClick = { session -> onSessionClick(session, collection) },
-                        onEnterSelectionMode = { onEnterSelectionMode(collection.localId) },
-                        onExitSelectionMode = onExitSelectionMode,
-                        onToggleSessionSelection = { linkId ->
-                            onToggleSessionSelection(collection.localId, linkId)
-                        },
-                        onSelectAll = { onSelectAll(collection.localId) },
-                        onDeselectAll = { onDeselectAll(collection.localId) },
-                        onDownloadSelected = { onDownloadSelected(collection.localId) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CollectionItem(
-    collection: CurtainCollectionEntity,
-    isExpanded: Boolean,
-    sessions: List<CollectionSessionEntity>,
-    isInSelectionMode: Boolean,
-    selectedSessionIds: Set<String>,
-    onToggleExpand: () -> Unit,
-    onRefresh: () -> Unit,
-    onDelete: () -> Unit,
-    onSessionClick: (CollectionSessionEntity) -> Unit,
-    onEnterSelectionMode: () -> Unit,
-    onExitSelectionMode: () -> Unit,
-    onToggleSessionSelection: (String) -> Unit,
-    onSelectAll: () -> Unit,
-    onDeselectAll: () -> Unit,
-    onDownloadSelected: () -> Unit
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    val allSelected = sessions.isNotEmpty() && selectedSessionIds.size == sessions.size
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onToggleExpand),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = if (isExpanded) Icons.Default.FolderOpen else Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = collection.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (collection.description.isNotBlank()) {
-                            Text(
-                                text = collection.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(
-                            text = "${collection.curtainCount} sessions • ${collection.ownerUsername}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = collection.sourceHostname.removePrefix("https://").removePrefix("http://"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                Row {
-                    IconButton(onClick = onToggleExpand) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "Collapse" else "Expand"
-                        )
-                    }
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Download Multiple") },
-                                onClick = {
-                                    showMenu = false
-                                    onEnterSelectionMode()
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.SelectAll, contentDescription = null)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Refresh") },
-                                onClick = {
-                                    onRefresh()
-                                    showMenu = false
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Refresh, contentDescription = null)
-                                }
-                            )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Delete") },
-                                onClick = {
-                                    onDelete()
-                                    showMenu = false
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                },
-                                colors = MenuDefaults.itemColors(
-                                    textColor = MaterialTheme.colorScheme.error
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(),
-                exit = shrinkVertically()
-            ) {
-                Column(
-                    modifier = Modifier.padding(top = 8.dp)
-                ) {
-                    HorizontalDivider()
-
-                    if (isInSelectionMode) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = onExitSelectionMode) {
-                                    Icon(Icons.Default.Close, contentDescription = "Cancel")
-                                }
-                                Text(
-                                    text = "${selectedSessionIds.size} selected",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                            Row {
-                                TextButton(
-                                    onClick = { if (allSelected) onDeselectAll() else onSelectAll() }
-                                ) {
-                                    Text(if (allSelected) "Deselect All" else "Select All")
-                                }
-                                Button(
-                                    onClick = onDownloadSelected,
-                                    enabled = selectedSessionIds.isNotEmpty()
-                                ) {
-                                    Icon(
-                                        Icons.Default.Download,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Download")
-                                }
-                            }
-                        }
-                        HorizontalDivider()
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (sessions.isEmpty()) {
-                        Text(
-                            text = "Loading sessions...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 36.dp, top = 4.dp, bottom = 4.dp)
-                        )
-                    } else {
-                        sessions.forEach { session ->
-                            CollectionSessionItem(
-                                session = session,
-                                isInSelectionMode = isInSelectionMode,
-                                isSelected = selectedSessionIds.contains(session.linkId),
-                                onClick = {
-                                    if (isInSelectionMode) {
-                                        onToggleSessionSelection(session.linkId)
-                                    } else {
-                                        onSessionClick(session)
-                                    }
-                                },
-                                onToggleSelection = { onToggleSessionSelection(session.linkId) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CollectionSessionItem(
-    session: CollectionSessionEntity,
-    isInSelectionMode: Boolean,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onToggleSelection: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = if (isInSelectionMode) 8.dp else 36.dp, top = 4.dp, bottom = 4.dp, end = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (isInSelectionMode) {
-            IconButton(
-                onClick = onToggleSelection,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    imageVector = if (isSelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                    contentDescription = if (isSelected) "Deselect" else "Select",
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = session.sessionName?.takeIf { it.isNotBlank() } ?: session.description.ifBlank { session.linkId },
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row {
-                Text(
-                    text = "ID: ${session.linkId.take(12)}...",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                session.curtainType?.let { type ->
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = type,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-        if (!isInSelectionMode) {
-            Icon(
-                imageVector = Icons.Default.Download,
-                contentDescription = "Load session",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun CollectionsEmptyState(
-    onLoadExample: () -> Unit
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(48.dp)
-            )
-            Text(
-                text = "No collections found",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Load an example collection or add collections via QR code scanning",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Button(
-                onClick = onLoadExample,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp)
-            ) {
-                Text("Load Example Collection")
-            }
-        }
-    }
-}
-
-@Composable
 private fun DeleteCollectionConfirmationDialog(
     collectionName: String,
     onDismiss: () -> Unit,
@@ -798,208 +269,13 @@ private fun DeleteCollectionConfirmationDialog(
         }
     )
 }
-/**
- * Single curtain item in the list.
- *
- * @param curtain Curtain entity
- * @param downloadProgress Download progress percentage (null if not downloading)
- * @param onDownload Download action callback
- * @param onTogglePin Toggle pin action callback
- * @param onEdit Edit description callback
- * @param onRedownload Redownload data callback
- * @param onDelete Delete action callback
- * @param onClick Click action callback
- */
+
 @Composable
-private fun CurtainItem(
-    curtain: CurtainEntity,
-    downloadProgress: Int?,
-    onDownload: () -> Unit,
-    onTogglePin: () -> Unit,
-    onEdit: () -> Unit,
-    onRedownload: () -> Unit,
-    onDelete: () -> Unit,
-    onClick: () -> Unit
+internal fun EmptyState(
+    onLoadExample: () -> Unit,
+    onLoadPTMExample: () -> Unit = {},
+    onLoadBothExamples: () -> Unit = {}
 ) {
-    var showMenu by remember { mutableStateOf(false) }
-    val isDownloading = downloadProgress != null
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(enabled = !isDownloading, onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = curtain.sessionName?.takeIf { it.isNotBlank() } ?: curtain.dataDescription,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Text(
-                        text = "ID: ${curtain.linkId.take(12)}...",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = formatDate(curtain.created),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = curtain.sourceHostname.removePrefix("https://").removePrefix("http://"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Row {
-                    if (curtain.isPinned) {
-                        IconButton(onClick = onTogglePin) {
-                            Icon(
-                                Icons.Default.PushPin,
-                                contentDescription = "Unpin",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    } else {
-                        IconButton(onClick = onTogglePin) {
-                            Icon(
-                                Icons.Default.PushPin,
-                                contentDescription = "Pin",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    if (curtain.file == null) {
-                        IconButton(
-                            onClick = onDownload,
-                            enabled = !isDownloading
-                        ) {
-                            if (isDownloading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(Icons.Default.Download, contentDescription = "Download")
-                            }
-                        }
-                    } else {
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More")
-                            }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Edit Description") },
-                                    onClick = {
-                                        onEdit()
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Edit, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (curtain.isPinned) "Unpin" else "Pin") },
-                                    onClick = {
-                                        onTogglePin()
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.PushPin, contentDescription = null)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Redownload") },
-                                    onClick = {
-                                        onRedownload()
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Download, contentDescription = null)
-                                    }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = { Text("Delete") },
-                                    onClick = {
-                                        onDelete()
-                                        showMenu = false
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    },
-                                    colors = MenuDefaults.itemColors(
-                                        textColor = MaterialTheme.colorScheme.error
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            downloadProgress?.let { progress ->
-                if (progress < 0) {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                    )
-                    Text(
-                        text = "Downloading...",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                } else {
-                    LinearProgressIndicator(
-                        progress = { progress / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                    )
-                    Text(
-                        text = "Downloading: $progress%",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Empty state when no curtains are available.
- *
- * @param onLoadExample Load example dataset callback
- */
-@Composable
-internal fun EmptyState(onLoadExample: () -> Unit) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -1021,26 +297,36 @@ internal fun EmptyState(onLoadExample: () -> Unit) {
             )
 
             Button(
-                onClick = onLoadExample,
+                onClick = onLoadBothExamples,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 32.dp)
             ) {
-                Text("Load Example Dataset")
+                Text("Load Both Example Datasets")
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onLoadExample,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("TP Only")
+                }
+
+                OutlinedButton(
+                    onClick = onLoadPTMExample,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("PTM Only")
+                }
             }
         }
     }
-}
-
-/**
- * Format timestamp to readable date string.
- *
- * @param timestamp Timestamp in milliseconds
- * @return Formatted date string
- */
-private fun formatDate(timestamp: Long): String {
-    val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    return formatter.format(Date(timestamp))
 }
 
 @Composable

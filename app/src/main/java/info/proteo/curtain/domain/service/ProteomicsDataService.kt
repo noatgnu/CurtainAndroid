@@ -8,6 +8,7 @@ import info.proteo.curtain.data.local.entity.GenesMapEntity
 import info.proteo.curtain.data.local.entity.PrimaryIdsMapEntity
 import info.proteo.curtain.data.local.entity.ProcessedProteomicsDataEntity
 import info.proteo.curtain.data.local.entity.RawProteomicsDataEntity
+import info.proteo.curtain.data.local.entity.UniProtEntryEntity
 import info.proteo.curtain.domain.database.ProteomicsDataDatabaseManager
 import info.proteo.curtain.domain.model.CurtainData
 import info.proteo.curtain.domain.model.CurtainDifferentialForm
@@ -24,6 +25,13 @@ class ProteomicsDataService @Inject constructor(
 
     suspend fun loadCurtainDataFromDatabase(linkId: String): CurtainData? {
         Log.d("ProteomicsDataService", "loadCurtainDataFromDatabase called for linkId=$linkId")
+
+        if (!databaseManager.checkDataExists(linkId)) {
+            Log.d("ProteomicsDataService", "Data does not exist or schema mismatch for linkId=$linkId, clearing stale data")
+            databaseManager.clearAllData(linkId)
+            return null
+        }
+
         val db = databaseManager.getDatabaseForLinkId(linkId)
         Log.d("ProteomicsDataService", "Got database instance for linkId=$linkId")
         val metadataEntity = db.proteomicsDataDao().getCurtainMetadata()
@@ -93,7 +101,11 @@ class ProteomicsDataService @Inject constructor(
         databaseManager.clearAllData(linkId)
 
         onProgress("Parsing processed data...")
-        val processedData = parseProcessedData(processedTsv, differentialForm)
+        var processedData = parseProcessedData(processedTsv, differentialForm)
+
+        if (differentialForm.isPTM) {
+            processedData = enrichPTMGeneNames(processedData, curtainData)
+        }
 
         onProgress("Parsing raw data...")
         val rawData = parseRawData(rawTsv, rawForm)
@@ -286,6 +298,22 @@ class ProteomicsDataService @Inject constructor(
                     db.proteomicsDataDao().insertGeneNameToAcc(geneNameToAccEntities)
                 }
             }
+
+            if (uniprotData.db != null) {
+                val uniprotDbMap = uniprotData.db as? Map<String, Any>
+                if (uniprotDbMap != null) {
+                    val uniprotEntries = uniprotDbMap.map { (accession, record) ->
+                        UniProtEntryEntity(
+                            accession = accession,
+                            dataJson = gson.toJson(record)
+                        )
+                    }
+                    if (uniprotEntries.isNotEmpty()) {
+                        Log.d("ProteomicsDataService", "Inserting ${uniprotEntries.size} UniProt entries")
+                        db.proteomicsDataDao().insertUniProtEntries(uniprotEntries)
+                    }
+                }
+            }
         }
     }
 
@@ -308,6 +336,17 @@ class ProteomicsDataService @Inject constructor(
         if (primaryIdIndex == -1) {
             Log.w("ProteomicsDataService", "Primary ID column '${form.primaryIDs}' not found")
             return emptyList()
+        }
+
+        val isPTM = form.isPTM
+        val accessionIndex = if (isPTM) headers.indexOf(form.accession) else -1
+        val positionIndex = if (isPTM) headers.indexOf(form.position) else -1
+        val positionPeptideIndex = if (isPTM) headers.indexOf(form.positionPeptide) else -1
+        val peptideSequenceIndex = if (isPTM) headers.indexOf(form.peptideSequence) else -1
+        val scoreIndex = if (isPTM) headers.indexOf(form.score) else -1
+
+        if (isPTM) {
+            Log.d("ProteomicsDataService", "PTM mode: accession=${form.accession}($accessionIndex), position=${form.position}($positionIndex), score=${form.score}($scoreIndex)")
         }
 
         val result = mutableListOf<ProcessedProteomicsDataEntity>()
@@ -347,18 +386,98 @@ class ProteomicsDataService @Inject constructor(
                 if (value.isEmpty()) "1" else value
             } else "1"
 
+            val accession = if (accessionIndex >= 0 && accessionIndex < values.size) {
+                values[accessionIndex].takeIf { it.isNotEmpty() }
+            } else null
+
+            val position = if (positionIndex >= 0 && positionIndex < values.size) {
+                values[positionIndex].takeIf { it.isNotEmpty() }
+            } else null
+
+            val positionPeptide = if (positionPeptideIndex >= 0 && positionPeptideIndex < values.size) {
+                values[positionPeptideIndex].takeIf { it.isNotEmpty() }
+            } else null
+
+            val peptideSequence = if (peptideSequenceIndex >= 0 && peptideSequenceIndex < values.size) {
+                values[peptideSequenceIndex].takeIf { it.isNotEmpty() }
+            } else null
+
+            val scoreValue = if (scoreIndex >= 0 && scoreIndex < values.size) {
+                values[scoreIndex].toDoubleOrNull()
+            } else null
+
             result.add(
                 ProcessedProteomicsDataEntity(
                     primaryId = primaryId,
                     geneNames = geneNames,
                     foldChange = foldChange,
                     significant = significant,
-                    comparison = comparisonValue
+                    comparison = comparisonValue,
+                    accession = accession,
+                    position = position,
+                    positionPeptide = positionPeptide,
+                    peptideSequence = peptideSequence,
+                    score = scoreValue
                 )
             )
         }
 
         return result
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun enrichPTMGeneNames(
+        processedData: List<ProcessedProteomicsDataEntity>,
+        curtainData: CurtainData
+    ): List<ProcessedProteomicsDataEntity> {
+        val uniprotDb = curtainData.extraData?.uniprot?.db as? Map<String, Any> ?: return processedData
+        val accMap = curtainData.extraData?.uniprot?.accMap as? Map<String, Any>
+
+        val accessionToGeneName = mutableMapOf<String, String>()
+        for ((accession, record) in uniprotDb) {
+            val recordMap = record as? Map<String, Any> ?: continue
+            val geneNames = recordMap["Gene Names"] as? String
+            if (!geneNames.isNullOrEmpty()) {
+                val firstGene = geneNames.split(" ", ";", "\\")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .firstOrNull()
+                if (!firstGene.isNullOrEmpty()) {
+                    accessionToGeneName[accession] = firstGene
+                }
+            }
+        }
+
+        Log.d("ProteomicsDataService", "Built accession→geneName map with ${accessionToGeneName.size} entries")
+
+        return processedData.map { entity ->
+            if (!entity.geneNames.isNullOrEmpty()) return@map entity
+
+            val accession = entity.accession ?: return@map entity
+
+            var geneName = accessionToGeneName[accession]
+
+            if (geneName == null && accMap != null) {
+                val canonical = accMap[accession] as? String
+                if (canonical != null) {
+                    geneName = accessionToGeneName[canonical]
+                }
+            }
+
+            if (geneName == null) {
+                val regex = Regex("[OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2}")
+                val match = regex.find(accession)
+                if (match != null) {
+                    geneName = accessionToGeneName[match.value]
+                }
+            }
+
+            if (geneName != null) {
+                entity.copy(geneNames = geneName)
+            } else {
+                entity
+            }
+        }
     }
 
     private fun parseRawData(
@@ -430,5 +549,87 @@ class ProteomicsDataService @Inject constructor(
     suspend fun clearDatabaseForLinkId(linkId: String) {
         databaseManager.clearAllData(linkId)
         Log.d("ProteomicsDataService", "Cleared all proteomics data for $linkId")
+    }
+
+    suspend fun forceRebuildProteomicsData(
+        linkId: String,
+        rawTsv: String?,
+        processedTsv: String?,
+        rawForm: CurtainRawForm,
+        differentialForm: CurtainDifferentialForm,
+        curtainData: CurtainData,
+        onProgress: (String) -> Unit = {}
+    ): CurtainData {
+        Log.d("ProteomicsDataService", "Force rebuilding proteomics data for $linkId")
+
+        onProgress("Clearing existing data...")
+        databaseManager.clearAllData(linkId)
+
+        onProgress("Parsing processed data...")
+        var processedData = parseProcessedData(processedTsv, differentialForm)
+
+        if (differentialForm.isPTM) {
+            processedData = enrichPTMGeneNames(processedData, curtainData)
+        }
+
+        onProgress("Parsing raw data...")
+        val rawData = parseRawData(rawTsv, rawForm)
+
+        onProgress("Building settings...")
+        val updatedCurtainData = buildSettingsFromSamples(curtainData, rawForm.samples)
+
+        val db = databaseManager.getDatabaseForLinkId(linkId)
+
+        if (processedData.isNotEmpty()) {
+            onProgress("Storing ${processedData.size} proteins...")
+            Log.d("ProteomicsDataService", "Inserting ${processedData.size} processed data entries")
+            db.proteomicsDataDao().insertProcessedData(processedData)
+        }
+
+        if (rawData.isNotEmpty()) {
+            onProgress("Storing ${rawData.size} raw data entries...")
+            Log.d("ProteomicsDataService", "Inserting ${rawData.size} raw data entries")
+            db.proteomicsDataDao().insertRawData(rawData)
+        }
+
+        onProgress("Storing gene mappings...")
+        parseAndStoreExtraDataMaps(updatedCurtainData, db)
+
+        onProgress("Storing metadata...")
+        storeCurtainMetadata(updatedCurtainData, db)
+
+        databaseManager.storeSchemaVersion(linkId)
+        Log.d("ProteomicsDataService", "Force rebuild complete for $linkId")
+
+        return updatedCurtainData
+    }
+
+    suspend fun getUniProtSequence(linkId: String, accession: String): String? {
+        val db = databaseManager.getDatabaseForLinkId(linkId)
+        val dataJson = db.proteomicsDataDao().getUniProtDataJson(accession) ?: return null
+        return try {
+            val record = gson.fromJson(dataJson, Map::class.java) as? Map<String, Any>
+            record?.get("Sequence") as? String
+        } catch (e: Exception) {
+            Log.w("ProteomicsDataService", "Failed to parse UniProt data for $accession: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun getUniProtDataJson(linkId: String, accession: String): String? {
+        val db = databaseManager.getDatabaseForLinkId(linkId)
+        return db.proteomicsDataDao().getUniProtDataJson(accession)
+    }
+
+    suspend fun getUniProtData(linkId: String, accession: String): Map<String, Any>? {
+        val db = databaseManager.getDatabaseForLinkId(linkId)
+        val dataJson = db.proteomicsDataDao().getUniProtDataJson(accession) ?: return null
+        return try {
+            @Suppress("UNCHECKED_CAST")
+            gson.fromJson(dataJson, Map::class.java) as? Map<String, Any>
+        } catch (e: Exception) {
+            Log.w("ProteomicsDataService", "Failed to parse UniProt data for $accession: ${e.message}")
+            null
+        }
     }
 }

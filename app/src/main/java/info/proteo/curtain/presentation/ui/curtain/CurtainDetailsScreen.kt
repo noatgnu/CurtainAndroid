@@ -33,10 +33,13 @@ import info.proteo.curtain.domain.service.VolcanoPlotDataService
 import info.proteo.curtain.presentation.ui.dialogs.ExportFormat
 import info.proteo.curtain.presentation.ui.dialogs.ExportPlotDialog
 import info.proteo.curtain.presentation.ui.dialogs.PointInteractionDialog
+import info.proteo.curtain.presentation.ui.dialogs.ProteinBatchSearchScreen
 import info.proteo.curtain.presentation.ui.dialogs.TraceOrderDialogCompose
+import info.proteo.curtain.presentation.utils.DeviceUtils
 import info.proteo.curtain.presentation.utils.FileExportUtils
 import info.proteo.curtain.presentation.viewmodel.CurtainDetailsViewModel
 import info.proteo.curtain.presentation.viewmodel.ProteinDetailsViewModel
+import info.proteo.curtain.presentation.viewmodel.ProteinSearchViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -83,7 +86,6 @@ fun CurtainDetailsSharedContent(
     var showSearchMenu by remember { mutableStateOf(false) }
     var showTraceOrderDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
-    var showBatchSearchDialog by remember { mutableStateOf(false) }
     var showQuickSearchDialog by remember { mutableStateOf(false) }
     var showSettingsVariantDialog by remember { mutableStateOf(false) }
     var annotationEditMode by remember { mutableStateOf(false) }
@@ -93,7 +95,15 @@ fun CurtainDetailsSharedContent(
     var positioningCandidate by remember { mutableStateOf<info.proteo.curtain.domain.model.AnnotationEditCandidate?>(null) }
     var showPointInteractionDialog by remember { mutableStateOf(false) }
     var pointClickData by remember { mutableStateOf<VolcanoPointClickData?>(null) }
-    val tabs = listOf("Overview", "Volcano Plot", "Protein List", "Settings")
+    var showBatchSearchDialog by remember { mutableStateOf(false) }
+    var showPTMViewerDialog by remember { mutableStateOf(false) }
+    var ptmViewerAccession by remember { mutableStateOf("") }
+    var showProteinChartDialog by remember { mutableStateOf(false) }
+    var chartPrimaryId by remember { mutableStateOf("") }
+    var chartGeneName by remember { mutableStateOf("") }
+    val isTablet = DeviceUtils.isTablet()
+    val isPTM = curtainData?.differentialForm?.isPTM == true
+    val tabs = listOf("Overview", "Volcano Plot", if (isPTM) "Site List" else "Protein List", "Settings")
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(linkId) {
@@ -115,7 +125,7 @@ fun CurtainDetailsSharedContent(
                 actions = {
                     Box {
                         IconButton(onClick = { showSearchMenu = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Search Proteins")
+                            Icon(Icons.Default.Search, contentDescription = if (isPTM) "Search Sites" else "Search Proteins")
                         }
                         DropdownMenu(
                             expanded = showSearchMenu,
@@ -132,7 +142,11 @@ fun CurtainDetailsSharedContent(
                             DropdownMenuItem(
                                 text = { Text("Batch Search") },
                                 onClick = {
-                                    showBatchSearchDialog = true
+                                    if (isTablet) {
+                                        showBatchSearchDialog = true
+                                    } else {
+                                        navController.navigate("batch_search/$linkId")
+                                    }
                                     showSearchMenu = false
                                 },
                                 leadingIcon = { Icon(Icons.Default.ViewList, null) }
@@ -168,10 +182,6 @@ fun CurtainDetailsSharedContent(
                                 onClick = {
                                     showMenu = false
                                     viewModel.forceRebuildDataset(linkId)
-                                    coroutineScope.launch {
-                                        kotlinx.coroutines.delay(500)
-                                        viewModel.loadCurtainData(linkId)
-                                    }
                                 },
                                 leadingIcon = { Icon(Icons.Default.Refresh, null) }
                             )
@@ -456,7 +466,25 @@ fun CurtainDetailsSharedContent(
                                     }
                                 }
                             )
-                            2 -> ProteinListTabNew(curtainData!!, linkId, navController)
+                            2 -> ProteinListTabNew(
+                                curtainData = curtainData!!,
+                                linkId = linkId,
+                                navController = navController,
+                                curtainDetailsViewModel = viewModel,
+                                onShowPTMViewerDialog = if (isTablet) {
+                                    { accession ->
+                                        ptmViewerAccession = accession
+                                        showPTMViewerDialog = true
+                                    }
+                                } else null,
+                                onShowProteinChartDialog = if (isTablet) {
+                                    { primaryId, geneName ->
+                                        chartPrimaryId = primaryId
+                                        chartGeneName = geneName
+                                        showProteinChartDialog = true
+                                    }
+                                } else null
+                            )
                             3 -> SettingsTab(curtainData!!, navController)
                         }
                     }
@@ -524,23 +552,6 @@ fun CurtainDetailsSharedContent(
         )
     }
 
-    if (showBatchSearchDialog && curtainData != null) {
-        val searchViewModel: info.proteo.curtain.presentation.viewmodel.ProteinSearchViewModel = hiltViewModel()
-
-        LaunchedEffect(curtainData) {
-            searchViewModel.setCurtainData(curtainData!!)
-        }
-
-        info.proteo.curtain.presentation.ui.dialogs.ProteinSearchDialog(
-            onDismiss = { showBatchSearchDialog = false },
-            viewModel = searchViewModel,
-            onCreateSelection = { selectionName, proteinIds ->
-                viewModel.createSelectionFromProteinIds(selectionName, proteinIds)
-                showBatchSearchDialog = false
-            }
-        )
-    }
-
     if (showQuickSearchDialog && curtainData != null) {
         val quickSearchViewModel: info.proteo.curtain.presentation.viewmodel.ProteinSearchViewModel = hiltViewModel()
 
@@ -569,6 +580,67 @@ fun CurtainDetailsSharedContent(
                 viewModel.loadSettingsVariant(updatedSettings, variantSelectedMap, variantSelectionsName)
             }
         )
+    }
+
+    if (showBatchSearchDialog && curtainData != null) {
+        val searchViewModel: ProteinSearchViewModel = hiltViewModel()
+
+        LaunchedEffect(curtainData) {
+            curtainData?.let { searchViewModel.setCurtainData(it) }
+        }
+
+        ProteinBatchSearchScreen(
+            onBack = { showBatchSearchDialog = false },
+            searchViewModel = searchViewModel,
+            detailsViewModel = viewModel
+        )
+    }
+
+    if (showPTMViewerDialog && curtainData != null && ptmViewerAccession.isNotEmpty()) {
+        info.proteo.curtain.presentation.ui.ptm.PTMViewerScreen(
+            linkId = linkId,
+            accession = ptmViewerAccession,
+            pCutoff = curtainData!!.settings.pCutoff,
+            fcCutoff = curtainData!!.settings.log2FCCutoff,
+            customSequences = curtainData!!.settings.customSequences,
+            variantCorrection = curtainData!!.settings.variantCorrection,
+            customPTMData = curtainData!!.settings.customPTMData,
+            onNavigateBack = {
+                showPTMViewerDialog = false
+                ptmViewerAccession = ""
+            }
+        )
+    }
+
+    if (showProteinChartDialog && curtainData != null && chartPrimaryId.isNotEmpty()) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = {
+                showProteinChartDialog = false
+                chartPrimaryId = ""
+                chartGeneName = ""
+            },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            androidx.compose.material3.Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .fillMaxHeight(0.95f),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                info.proteo.curtain.presentation.ui.chart.ProteinChartNavigationScreen(
+                    linkId = linkId,
+                    proteinId = chartPrimaryId,
+                    geneName = chartGeneName.ifEmpty { null },
+                    curtainDetailsViewModel = viewModel,
+                    onNavigateBack = {
+                        showProteinChartDialog = false
+                        chartPrimaryId = ""
+                        chartGeneName = ""
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -600,6 +672,29 @@ internal fun OverviewTab(curtainData: CurtainData, proteinCount: Int) {
                 InfoRow("Primary ID Column", curtainData.differentialForm.primaryIDs)
                 InfoRow("Fold Change Column", curtainData.differentialForm.foldChange)
                 InfoRow("Significance Column", curtainData.differentialForm.significant)
+            }
+        }
+
+        if (curtainData.differentialForm.isPTM) {
+            Card {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("PTM Column Mapping", style = MaterialTheme.typography.titleMedium)
+                    Divider()
+                    InfoRow("Accession Column", curtainData.differentialForm.accession)
+                    InfoRow("Position Column", curtainData.differentialForm.position)
+                    if (curtainData.differentialForm.positionPeptide.isNotEmpty()) {
+                        InfoRow("Position in Peptide", curtainData.differentialForm.positionPeptide)
+                    }
+                    if (curtainData.differentialForm.peptideSequence.isNotEmpty()) {
+                        InfoRow("Peptide Sequence Column", curtainData.differentialForm.peptideSequence)
+                    }
+                    if (curtainData.differentialForm.score.isNotEmpty()) {
+                        InfoRow("Score Column", curtainData.differentialForm.score)
+                    }
+                    if (curtainData.differentialForm.sequence.isNotEmpty()) {
+                        InfoRow("Sequence Column", curtainData.differentialForm.sequence)
+                    }
+                }
             }
         }
     }
@@ -684,7 +779,21 @@ private fun VolcanoPlotTab(
                             onPlotReady = { isPlotReady = true },
                             onPlotError = { error -> plotError = error },
                             onWebViewCreated = { webView -> currentWebView = webView },
-                            onPointClicked = onPointClicked
+                            onPointClicked = onPointClicked,
+                            onImageExported = { json ->
+                                scope.launch {
+                                    try {
+                                        val jsonObj = JSONObject(json)
+                                        val format = jsonObj.getString("format")
+                                        val filename = jsonObj.getString("filename")
+                                        val dataUrl = jsonObj.getString("dataUrl")
+                                        val result = FileExportUtils.exportFromDataUrl(context, filename, dataUrl, format)
+                                        exportMessage = result.getOrNull() ?: result.exceptionOrNull()?.message
+                                    } catch (e: Exception) {
+                                        exportMessage = "Export failed: ${e.message}"
+                                    }
+                                }
+                            }
                         )
 
                         if (annotationEditMode) {
@@ -953,27 +1062,14 @@ private fun VolcanoPlotTab(
             defaultFileName = "volcano_plot_${curtainData.linkId}",
             onDismiss = onExportDismiss,
             onExport = { fileName, format ->
-                scope.launch {
-                    try {
-                        val result = when (format) {
-                            ExportFormat.HTML -> FileExportUtils.exportHtmlToFile(context, fileName, volcanoPlotHtml!!)
-                            ExportFormat.PNG -> {
-                                currentWebView?.let { webView ->
-                                    FileExportUtils.captureWebViewBitmap(webView) { bitmap ->
-                                        scope.launch {
-                                            val pngResult = FileExportUtils.exportPngToFile(context, fileName, bitmap)
-                                            exportMessage = pngResult.getOrNull() ?: pngResult.exceptionOrNull()?.message
-                                        }
-                                    }
-                                    Result.success("Capturing plot...")
-                                } ?: Result.failure(Exception("Plot not ready for export"))
-                            }
-                        }
-                        if (format == ExportFormat.HTML) exportMessage = result.getOrNull() ?: result.exceptionOrNull()?.message
-                    } catch (e: Exception) {
-                        exportMessage = "Export failed: ${e.message}"
-                    }
+                val formatStr = when (format) {
+                    ExportFormat.SVG -> "svg"
+                    ExportFormat.PNG -> "png"
                 }
+                currentWebView?.evaluateJavascript(
+                    "window.VolcanoPlot.exportPlot('$formatStr', '$fileName')",
+                    null
+                ) ?: run { exportMessage = "Plot not ready for export" }
                 onExportDismiss()
             }
         )
@@ -994,7 +1090,8 @@ internal fun VolcanoPlotView(
     onPlotReady: () -> Unit,
     onPlotError: (String) -> Unit,
     onWebViewCreated: (WebView) -> Unit = {},
-    onPointClicked: (String) -> Unit = {}
+    onPointClicked: (String) -> Unit = {},
+    onImageExported: (String) -> Unit = {}
 ) {
     var webView: WebView? by remember { mutableStateOf(null) }
     var lastLoadedHtml by remember { mutableStateOf("") }
@@ -1059,6 +1156,9 @@ internal fun VolcanoPlotView(
                     onPointClicked = { json ->
                         android.util.Log.d("VolcanoPlotView", "Point clicked: $json")
                         onPointClicked(json)
+                    },
+                    onImageExported = { json ->
+                        onImageExported(json)
                     }
                 )
 
@@ -1083,11 +1183,16 @@ internal fun ProteinListTabNew(
     curtainData: CurtainData,
     linkId: String,
     navController: NavController,
-    proteinDetailsViewModel: ProteinDetailsViewModel = hiltViewModel()
+    proteinDetailsViewModel: ProteinDetailsViewModel = hiltViewModel(),
+    curtainDetailsViewModel: CurtainDetailsViewModel? = null,
+    onShowPTMViewerDialog: ((String) -> Unit)? = null,
+    onShowProteinChartDialog: ((String, String) -> Unit)? = null
 ) {
     val proteins by proteinDetailsViewModel.proteins.collectAsState()
     val selectionGroups by proteinDetailsViewModel.selectionGroups.collectAsState()
     val searchQuery by proteinDetailsViewModel.searchQuery.collectAsState()
+    val accessionGroups by proteinDetailsViewModel.accessionGroups.collectAsState()
+    val sequenceCache by proteinDetailsViewModel.sequenceCache.collectAsState()
 
     LaunchedEffect(linkId) {
         proteinDetailsViewModel.setLinkId(linkId)
@@ -1097,21 +1202,65 @@ internal fun ProteinListTabNew(
         proteinDetailsViewModel.setCurtainData(curtainData)
     }
 
+    LaunchedEffect(accessionGroups) {
+        if (curtainData.differentialForm.isPTM && accessionGroups.isNotEmpty()) {
+            val accessions = accessionGroups.map { it.accession }.toSet()
+            proteinDetailsViewModel.fetchSequencesForAccessions(accessions)
+        }
+    }
+
     ProteinDetailsTab(
         proteins = proteins,
         selectionGroups = selectionGroups,
         searchQuery = searchQuery,
         onSearchQueryChange = { query -> proteinDetailsViewModel.updateSearchQuery(query) },
         onProteinClick = { protein ->
-            val encodedGeneName = java.net.URLEncoder.encode(protein.geneName ?: "", "UTF-8")
-            navController.navigate("protein_chart/$linkId/${protein.primaryId}/$encodedGeneName")
+            if (onShowProteinChartDialog != null) {
+                onShowProteinChartDialog(protein.primaryId, protein.geneName ?: "")
+            } else {
+                val encodedGeneName = java.net.URLEncoder.encode(protein.geneName ?: "", "UTF-8")
+                navController.navigate("protein_chart/$linkId/${protein.primaryId}/$encodedGeneName")
+            }
         },
         onAddToGroup = { proteinId, groupId ->
             proteinDetailsViewModel.addProteinToGroup(proteinId, groupId)
         },
+        isPTM = curtainData.differentialForm.isPTM,
+        accessionGroups = accessionGroups,
         onRemoveFromGroup = { proteinId, groupId ->
             proteinDetailsViewModel.removeProteinFromGroup(proteinId, groupId)
-        }
+        },
+        sequenceResolver = if (curtainData.differentialForm.isPTM) {
+            SequenceResolver(
+                customSequences = curtainData.settings.customSequences,
+                variantCorrection = curtainData.settings.variantCorrection,
+                sequenceCache = sequenceCache
+            )
+        } else null,
+        onViewPTMViewer = if (curtainData.differentialForm.isPTM) {
+            { accession ->
+                if (onShowPTMViewerDialog != null) {
+                    onShowPTMViewerDialog(accession)
+                } else {
+                    navController.navigate("ptm_viewer/$linkId/$accession")
+                }
+            }
+        } else null,
+        getVariantSourceLabel = if (curtainData.differentialForm.isPTM && curtainDetailsViewModel != null) {
+            { accession -> curtainDetailsViewModel.getVariantSourceLabel(accession) }
+        } else null,
+        getAvailableIsoforms = if (curtainData.differentialForm.isPTM && curtainDetailsViewModel != null) {
+            { accession -> curtainDetailsViewModel.getAvailableIsoformsForAccession(accession) }
+        } else null,
+        onSetVariant = if (curtainData.differentialForm.isPTM && curtainDetailsViewModel != null) {
+            { accession, variant -> curtainDetailsViewModel.setVariantCorrection(accession, variant) }
+        } else null,
+        onSetCustomSequence = if (curtainData.differentialForm.isPTM && curtainDetailsViewModel != null) {
+            { accession, sequence -> curtainDetailsViewModel.setCustomSequence(accession, sequence) }
+        } else null,
+        onClearVariant = if (curtainData.differentialForm.isPTM && curtainDetailsViewModel != null) {
+            { accession -> curtainDetailsViewModel.clearVariantForAccession(accession) }
+        } else null
     )
 }
 
@@ -1154,7 +1303,9 @@ private suspend fun parsePointClickData(
             pValue = pValue,
             negLog10PValue = y,
             color = color,
-            isSignificant = isSignificant
+            isSignificant = isSignificant,
+            accession = dataPoint["accession"] as? String,
+            position = dataPoint["position"] as? String
         )
     }
 

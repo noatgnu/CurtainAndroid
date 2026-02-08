@@ -18,6 +18,9 @@ import info.proteo.curtain.domain.service.DeepLinkResult
 import info.proteo.curtain.presentation.ui.chart.ProteinChartNavigationScreen
 import info.proteo.curtain.presentation.ui.color.ColorManagementScreen
 import info.proteo.curtain.presentation.ui.curtain.CurtainDetailsScreen
+import info.proteo.curtain.presentation.ui.dialogs.ProteinBatchSearchScreen
+import info.proteo.curtain.presentation.ui.ptm.PTMViewerScreen
+import info.proteo.curtain.presentation.viewmodel.ProteinSearchViewModel
 import info.proteo.curtain.presentation.ui.doi.DOILoaderScreen
 import info.proteo.curtain.presentation.ui.main.MainScreen
 import info.proteo.curtain.presentation.ui.qr.QRScannerScreen
@@ -65,6 +68,34 @@ fun CurtainNavGraph(
                 linkId = linkId,
                 navController = navController,
                 viewModel = viewModel
+            )
+        }
+
+        composable(
+            route = "batch_search/{linkId}",
+            arguments = listOf(navArgument("linkId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val linkId = backStackEntry.arguments?.getString("linkId") ?: ""
+            val parentEntry = remember(linkId) {
+                navController.previousBackStackEntry
+            }
+            val detailsViewModel: info.proteo.curtain.presentation.viewmodel.CurtainDetailsViewModel =
+                if (parentEntry != null) {
+                    hiltViewModel(parentEntry)
+                } else {
+                    hiltViewModel()
+                }
+            val searchViewModel: ProteinSearchViewModel = hiltViewModel()
+            val curtainData by detailsViewModel.curtainData.collectAsState()
+
+            LaunchedEffect(curtainData) {
+                curtainData?.let { searchViewModel.setCurtainData(it) }
+            }
+
+            ProteinBatchSearchScreen(
+                onBack = { navController.navigateUp() },
+                searchViewModel = searchViewModel,
+                detailsViewModel = detailsViewModel
             )
         }
 
@@ -458,6 +489,41 @@ fun CurtainNavGraph(
             info.proteo.curtain.presentation.ui.settings.ColorPaletteScreen(
                 navController = navController,
                 viewModel = viewModel
+            )
+        }
+
+        composable(
+            route = "ptm_viewer/{linkId}/{accession}",
+            arguments = listOf(
+                navArgument("linkId") { type = NavType.StringType },
+                navArgument("accession") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val linkId = backStackEntry.arguments?.getString("linkId") ?: ""
+            val accession = backStackEntry.arguments?.getString("accession") ?: ""
+            val parentEntry = remember(linkId) {
+                navController.previousBackStackEntry
+            }
+            val detailsViewModel: info.proteo.curtain.presentation.viewmodel.CurtainDetailsViewModel =
+                if (parentEntry != null) {
+                    hiltViewModel(parentEntry)
+                } else {
+                    hiltViewModel()
+                }
+            val curtainData by detailsViewModel.curtainData.collectAsState()
+            val pCutoff = curtainData?.settings?.pCutoff ?: 0.05
+            val fcCutoff = curtainData?.settings?.log2FCCutoff ?: 0.6
+            val customSequences = curtainData?.settings?.customSequences ?: emptyMap()
+            val variantCorrection = curtainData?.settings?.variantCorrection ?: emptyMap()
+
+            PTMViewerScreen(
+                linkId = linkId,
+                accession = accession,
+                pCutoff = pCutoff,
+                fcCutoff = fcCutoff,
+                customSequences = customSequences,
+                variantCorrection = variantCorrection,
+                onNavigateBack = { navController.navigateUp() }
             )
         }
     }

@@ -1,0 +1,37 @@
+{
+  "differentialForm": {
+    "_primaryIDs": "Index",
+    "_geneNames": "",
+    "_foldChange": "Welch's T-test Difference AO_UT",
+    "_transformFC": false,
+    "_significant": "-Log Welch's T-test p-value AO_UT",
+    "_transformSignificant": false,
+    "_comparison": "CurtainSetComparison",
+    "_comparisonSelect": "1",
+    "_accession": "ProteinID",
+    "_position": "Position",
+    "_positionPeptide": "Position.in.peptide",
+    "_peptideSequence": "Peptide",
+    "_score": "MaxPepProb",
+    "_sequence": "SequenceWindow",
+    "_reverseFoldChange": false
+  },
+  "rawForm": {
+    "_primaryIDs": "T: Index",
+    "_samples": [
+      "UT.01",
+      "AO.01",
+      "UT.02",
+      "AO.02"
+    ]
+  },
+  "settings": {
+    "currentID": "dd9ad30f-5c46-472c-8c1a-5936babb7652",
+    "pCutoff": 0.05,
+    "log2FCCutoff": 0.6,
+    "description": "PTM fixture test",
+    "version": 2
+  },
+  "password": "",
+  "fetchUniProt": true
+}

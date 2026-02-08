@@ -2,6 +2,8 @@ package info.proteo.curtain.presentation.ui.search
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +31,7 @@ fun ProteinSearchScreen(
     viewModel: ProteinSearchViewModel = hiltViewModel()
 ) {
     val batchMode by viewModel.batchMode.collectAsState()
+    val isPTM by viewModel.isPTM.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val caseSensitive by viewModel.caseSensitive.collectAsState()
     val exactMatch by viewModel.exactMatch.collectAsState()
@@ -91,508 +94,530 @@ fun ProteinSearchScreen(
             )
         }
     ) { padding ->
-        Column(
+        val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = maxOf(16.dp, imeBottom + 16.dp))
         ) {
             if (batchMode) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                item(key = "batch_header") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        )
                     ) {
-                        Text(
-                            text = "Batch Mode Active",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Multi-line with ID resolution",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = searchType == SearchType.GENE_NAMES,
-                        onClick = { viewModel.setSearchType(SearchType.GENE_NAMES) },
-                        label = { Text("Gene Names") },
-                        leadingIcon = {
-                            if (searchType == SearchType.GENE_NAMES) {
-                                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    )
-                    FilterChip(
-                        selected = searchType == SearchType.PRIMARY_IDS,
-                        onClick = { viewModel.setSearchType(SearchType.PRIMARY_IDS) },
-                        label = { Text("Primary IDs") },
-                        leadingIcon = {
-                            if (searchType == SearchType.PRIMARY_IDS) {
-                                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (batchMode) Modifier.height(180.dp) else Modifier),
-                label = {
-                    Text(if (batchMode) "Batch Input (multi-line)" else "Search proteins")
-                },
-                placeholder = {
-                    Text(
-                        if (batchMode)
-                            "Enter one ${if (searchType == SearchType.GENE_NAMES) "gene name" else "protein ID"} per line\nOr semicolons: ACTB;TUBB;GAPDH"
-                        else
-                            "Enter protein ID or gene name"
-                    )
-                },
-                leadingIcon = if (!batchMode) {
-                    { Icon(Icons.Default.Search, "Search") }
-                } else null,
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                            Icon(Icons.Default.Clear, "Clear")
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = if (batchMode) ImeAction.Default else ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = { if (!batchMode) viewModel.performSearch() }
-                ),
-                singleLine = !batchMode,
-                maxLines = if (batchMode) Int.MAX_VALUE else 1,
-                shape = RoundedCornerShape(8.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (expandedOptions) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Search Options",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        if (batchMode) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Use Regex")
-                                Switch(
-                                    checked = useRegex,
-                                    onCheckedChange = { viewModel.toggleUseRegex() }
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Significant Only")
-                                Switch(
-                                    checked = significantOnly,
-                                    onCheckedChange = { viewModel.toggleSignificantOnly() }
-                                )
-                            }
-                        } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Case Sensitive")
-                                Switch(
-                                    checked = caseSensitive,
-                                    onCheckedChange = { viewModel.toggleCaseSensitive() }
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Exact Match")
-                                Switch(
-                                    checked = exactMatch,
-                                    onCheckedChange = { viewModel.toggleExactMatch() }
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Use Regex")
-                                Switch(
-                                    checked = useRegex,
-                                    onCheckedChange = { viewModel.toggleUseRegex() }
-                                )
-                            }
-
-                            Divider(modifier = Modifier.padding(vertical = 8.dp))
-
-                            Text(
-                                text = "Search In",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Protein IDs")
-                                Switch(
-                                    checked = searchInProteinIds,
-                                    onCheckedChange = { viewModel.toggleSearchInProteinIds() }
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Gene Names")
-                                Switch(
-                                    checked = searchInGeneNames,
-                                    onCheckedChange = { viewModel.toggleSearchInGeneNames() }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            if (batchMode && !expandedOptions) {
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Advanced Filtering",
-                                style = MaterialTheme.typography.titleSmall,
+                                text = "Batch Mode Active",
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (advancedFiltering != null) {
-                                    AssistChip(
-                                        onClick = { viewModel.setAdvancedFiltering(null) },
-                                        label = { Text("Clear") },
-                                        leadingIcon = {
-                                            Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
-                                        }
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { expandedAdvanced = !expandedAdvanced }
-                                ) {
-                                    Icon(
-                                        if (expandedAdvanced) Icons.Default.KeyboardArrowUp
-                                        else Icons.Default.KeyboardArrowDown,
-                                        "Toggle"
-                                    )
-                                }
-                            }
-                        }
-
-                        if (expandedAdvanced) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Divider()
-                            Spacer(modifier = Modifier.height(12.dp))
-
                             Text(
-                                text = "P-value Range",
-                                style = MaterialTheme.typography.labelMedium
+                                text = "Multi-line with ID resolution",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = minP,
-                                    onValueChange = { minP = it },
-                                    label = { Text("Min") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
-                                )
-                                OutlinedTextField(
-                                    value = maxP,
-                                    onValueChange = { maxP = it },
-                                    label = { Text("Max") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Search Left Side (negative FC)",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Switch(
-                                    checked = searchLeft,
-                                    onCheckedChange = { searchLeft = it }
-                                )
-                            }
-
-                            if (searchLeft) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedTextField(
-                                        value = minFCLeft,
-                                        onValueChange = { minFCLeft = it },
-                                        label = { Text("Min FC") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true
-                                    )
-                                    OutlinedTextField(
-                                        value = maxFCLeft,
-                                        onValueChange = { maxFCLeft = it },
-                                        label = { Text("Max FC") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Search Right Side (positive FC)",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Switch(
-                                    checked = searchRight,
-                                    onCheckedChange = { searchRight = it }
-                                )
-                            }
-
-                            if (searchRight) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedTextField(
-                                        value = minFCRight,
-                                        onValueChange = { minFCRight = it },
-                                        label = { Text("Min FC") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true
-                                    )
-                                    OutlinedTextField(
-                                        value = maxFCRight,
-                                        onValueChange = { maxFCRight = it },
-                                        label = { Text("Max FC") },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Button(
-                                onClick = {
-                                    try {
-                                        val params = AdvancedFilterParams(
-                                            minP = minP.toDouble(),
-                                            maxP = maxP.toDouble(),
-                                            minFCLeft = minFCLeft.toDouble(),
-                                            maxFCLeft = maxFCLeft.toDouble(),
-                                            minFCRight = minFCRight.toDouble(),
-                                            maxFCRight = maxFCRight.toDouble(),
-                                            searchLeft = searchLeft,
-                                            searchRight = searchRight
-                                        )
-                                        viewModel.setAdvancedFiltering(params)
-                                        expandedAdvanced = false
-                                    } catch (e: Exception) {
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Apply Advanced Filters")
-                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        if (batchMode) viewModel.performBatchSearch()
-                        else viewModel.performSearch()
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = searchQuery.isNotEmpty() && !isSearching
-                ) {
-                    Icon(Icons.Default.Search, null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Search")
-                }
-
-                if (searchResults.isNotEmpty() || batchSearchResults.isNotEmpty()) {
-                    OutlinedButton(
-                        onClick = { showSaveDialog = true },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Save, null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Save")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            error?.let { errorMessage ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
+                item(key = "filter_chips") {
                     Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
+                        FilterChip(
+                            selected = searchType == SearchType.GENE_NAMES,
+                            onClick = { viewModel.setSearchType(SearchType.GENE_NAMES) },
+                            label = { Text("Gene Names") },
+                            leadingIcon = {
+                                if (searchType == SearchType.GENE_NAMES) {
+                                    Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = errorMessage,
-                            color = MaterialTheme.colorScheme.error
+                        FilterChip(
+                            selected = searchType == SearchType.PRIMARY_IDS,
+                            onClick = { viewModel.setSearchType(SearchType.PRIMARY_IDS) },
+                            label = { Text("Primary IDs") },
+                            leadingIcon = {
+                                if (searchType == SearchType.PRIMARY_IDS) {
+                                    Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
+                                }
+                            }
                         )
+                        if (isPTM) {
+                            FilterChip(
+                                selected = searchType == SearchType.ACCESSION,
+                                onClick = { viewModel.setSearchType(SearchType.ACCESSION) },
+                                label = { Text("Accession") },
+                                leadingIcon = {
+                                    if (searchType == SearchType.ACCESSION) {
+                                        Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
 
-            if (isSearching) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            } else if (batchMode && batchSearchResults.isNotEmpty()) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer
-                            )
+            item(key = "search_input") {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (batchMode) Modifier.height(180.dp) else Modifier),
+                    label = {
+                        Text(if (batchMode) "Batch Input (multi-line)" else "Search proteins")
+                    },
+                    placeholder = {
+                        Text(
+                            if (batchMode)
+                                "Enter one ${when (searchType) { SearchType.GENE_NAMES -> "gene name"; SearchType.ACCESSION -> "accession"; else -> "protein ID" }} per line\nOr semicolons: ACTB;TUBB;GAPDH"
+                            else
+                                "Enter protein ID or gene name"
+                        )
+                    },
+                    leadingIcon = if (!batchMode) {
+                        { Icon(Icons.Default.Search, "Search") }
+                    } else null,
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                Icon(Icons.Default.Clear, "Clear")
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = if (batchMode) ImeAction.Default else ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { if (!batchMode) viewModel.performSearch() }
+                    ),
+                    singleLine = !batchMode,
+                    maxLines = if (batchMode) Int.MAX_VALUE else 1,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
+            if (expandedOptions) {
+                item(key = "search_options") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
                         ) {
+                            Text(
+                                text = "Search Options",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (batchMode) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Use Regex")
+                                    Switch(
+                                        checked = useRegex,
+                                        onCheckedChange = { viewModel.toggleUseRegex() }
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Significant Only")
+                                    Switch(
+                                        checked = significantOnly,
+                                        onCheckedChange = { viewModel.toggleSignificantOnly() }
+                                    )
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Case Sensitive")
+                                    Switch(
+                                        checked = caseSensitive,
+                                        onCheckedChange = { viewModel.toggleCaseSensitive() }
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Exact Match")
+                                    Switch(
+                                        checked = exactMatch,
+                                        onCheckedChange = { viewModel.toggleExactMatch() }
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Use Regex")
+                                    Switch(
+                                        checked = useRegex,
+                                        onCheckedChange = { viewModel.toggleUseRegex() }
+                                    )
+                                }
+
+                                Divider(modifier = Modifier.padding(vertical = 8.dp))
+
+                                Text(
+                                    text = "Search In",
+                                    style = MaterialTheme.typography.titleSmall
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Protein IDs")
+                                    Switch(
+                                        checked = searchInProteinIds,
+                                        onCheckedChange = { viewModel.toggleSearchInProteinIds() }
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Gene Names")
+                                    Switch(
+                                        checked = searchInGeneNames,
+                                        onCheckedChange = { viewModel.toggleSearchInGeneNames() }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (batchMode && !expandedOptions) {
+                item(key = "advanced_filtering") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
-                                    Text(
-                                        text = "Total: ${viewModel.getAllPrimaryIdsFromBatchResults().size} proteins",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                Text(
+                                    text = "Advanced Filtering",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (advancedFiltering != null) {
+                                        AssistChip(
+                                            onClick = { viewModel.setAdvancedFiltering(null) },
+                                            label = { Text("Clear") },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp))
+                                            }
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { expandedAdvanced = !expandedAdvanced }
+                                    ) {
+                                        Icon(
+                                            if (expandedAdvanced) Icons.Default.KeyboardArrowUp
+                                            else Icons.Default.KeyboardArrowDown,
+                                            "Toggle"
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (expandedAdvanced) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Divider()
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Text(
+                                    text = "P-value Range",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedTextField(
+                                        value = minP,
+                                        onValueChange = { minP = it },
+                                        label = { Text("Min") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true
                                     )
-                                    Text(
-                                        text = "${batchSearchResults.size} search terms matched",
-                                        style = MaterialTheme.typography.bodySmall
+                                    OutlinedTextField(
+                                        value = maxP,
+                                        onValueChange = { maxP = it },
+                                        label = { Text("Max") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true
                                     )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Search Left Side (negative FC)",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Switch(
+                                        checked = searchLeft,
+                                        onCheckedChange = { searchLeft = it }
+                                    )
+                                }
+
+                                if (searchLeft) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = minFCLeft,
+                                            onValueChange = { minFCLeft = it },
+                                            label = { Text("Min FC") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = maxFCLeft,
+                                            onValueChange = { maxFCLeft = it },
+                                            label = { Text("Max FC") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Search Right Side (positive FC)",
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Switch(
+                                        checked = searchRight,
+                                        onCheckedChange = { searchRight = it }
+                                    )
+                                }
+
+                                if (searchRight) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = minFCRight,
+                                            onValueChange = { minFCRight = it },
+                                            label = { Text("Min FC") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                        OutlinedTextField(
+                                            value = maxFCRight,
+                                            onValueChange = { maxFCRight = it },
+                                            label = { Text("Max FC") },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val params = AdvancedFilterParams(
+                                                minP = minP.toDouble(),
+                                                maxP = maxP.toDouble(),
+                                                minFCLeft = minFCLeft.toDouble(),
+                                                maxFCLeft = maxFCLeft.toDouble(),
+                                                minFCRight = minFCRight.toDouble(),
+                                                maxFCRight = maxFCRight.toDouble(),
+                                                searchLeft = searchLeft,
+                                                searchRight = searchRight
+                                            )
+                                            viewModel.setAdvancedFiltering(params)
+                                            expandedAdvanced = false
+                                        } catch (_: Exception) {
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Apply Advanced Filters")
                                 }
                             }
                         }
                     }
+                }
+            }
 
-                    items(batchSearchResults) { group ->
-                        BatchSearchResultGroupCard(group = group)
+            item(key = "search_button") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (batchMode) viewModel.performBatchSearch()
+                            else viewModel.performSearch()
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = searchQuery.isNotEmpty() && !isSearching
+                    ) {
+                        Icon(Icons.Default.Search, null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Search")
+                    }
+
+                    if (searchResults.isNotEmpty() || batchSearchResults.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { showSaveDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Save, null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Save")
+                        }
                     }
                 }
+            }
+
+            error?.let { errorMessage ->
+                item(key = "error") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = errorMessage,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (isSearching) {
+                item(key = "loading") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (batchMode && batchSearchResults.isNotEmpty()) {
+                item(key = "batch_summary") {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Total: ${viewModel.getAllPrimaryIdsFromBatchResults().size} proteins",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${batchSearchResults.size} search terms matched",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+
+                items(batchSearchResults, key = { "batch_${it.searchTerm}" }) { group ->
+                    BatchSearchResultGroupCard(group = group)
+                }
             } else if (!batchMode && searchResults.isEmpty() && searchQuery.isNotEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No results found",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                item(key = "no_results") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No results found",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             } else if (!batchMode && searchResults.isNotEmpty()) {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                item(key = "results_header") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -610,16 +635,10 @@ fun ProteinSearchScreen(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(searchResults) { result ->
-                            SearchResultItem(result = result)
-                        }
-                    }
+                items(searchResults, key = { "result_${it.proteinId}" }) { result ->
+                    SearchResultItem(result = result)
                 }
             }
         }
@@ -674,6 +693,29 @@ fun SearchResultItem(result: SearchResult) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    if (result.accession != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = result.accession,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                            result.position?.let { pos ->
+                                Text(
+                                    text = "Pos: $pos",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                            result.score?.let { s ->
+                                Text(
+                                    text = "Score: ${String.format("%.2f", s)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
+                        }
                     }
                 }
                 if (result.isSignificant) {

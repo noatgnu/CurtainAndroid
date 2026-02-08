@@ -16,6 +16,14 @@ object CurtainConstants {
         const val CURTAIN_TYPE = "TP"
     }
 
+    object ExamplePTMData {
+        const val UNIQUE_ID = "85970b1d-8052-4d6f-bf67-654396534d76"
+        const val API_URL = "https://celsus.muttsu.xyz/"
+        const val FRONTEND_URL = "https://curtainptm.proteo.info/"
+        const val DESCRIPTION = "Example PTM Dataset"
+        const val CURTAIN_TYPE = "PTM"
+    }
+
     object ExampleCollection {
         const val COLLECTION_ID = 2
         const val API_URL = "https://celsus.muttsu.xyz/"

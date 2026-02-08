@@ -120,10 +120,8 @@ class ViolinPlotGenerator @Inject constructor(
             "data" to traces,
             "layout" to layout,
             "config" to mapOf(
-                "displayModeBar" to true,
-                "displaylogo" to false,
-                "responsive" to true,
-                "modeBarButtonsToRemove" to listOf("sendDataToCloud", "editInChartStudio")
+                "displayModeBar" to false,
+                "responsive" to true
             )
         )
 

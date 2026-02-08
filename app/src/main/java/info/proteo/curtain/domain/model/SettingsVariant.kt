@@ -59,7 +59,10 @@ data class SettingsVariant(
             enrichrGeneRankMap = settings.enrichrGeneRankMap,
             enrichrRunList = settings.enrichrRunList,
             extraData = settings.extraData,
-            markerSizeMap = settings.markerSizeMap
+            markerSizeMap = settings.markerSizeMap,
+            variantCorrection = settings.variantCorrection,
+            customSequences = settings.customSequences,
+            customPTMData = settings.customPTMData
         )
     }
 

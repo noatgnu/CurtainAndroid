@@ -92,7 +92,10 @@ data class CurtainSettings(
     val metabolomicsColumnMap: MetabolomicsColumnMap = MetabolomicsColumnMap(),
     val encrypted: Boolean = false,
     val dataAnalysisContact: String = "",
-    val markerSizeMap: Map<String, Any> = emptyMap()
+    val markerSizeMap: Map<String, Any> = emptyMap(),
+    val variantCorrection: Map<String, Any> = emptyMap(),
+    val customSequences: Map<String, Any> = emptyMap(),
+    val customPTMData: Map<String, Any> = emptyMap()
 )
 
 data class Project(

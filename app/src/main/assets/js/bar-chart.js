@@ -209,6 +209,28 @@ if (typeof Plotly === 'undefined') {
             });
         },
 
+        exportPlot: function(format, filename) {
+            if (!this.plotDiv) return;
+            var self = this;
+            Plotly.toImage(this.plotDiv, {
+                format: format,
+                width: self.currentLayout.width || 1200,
+                height: self.currentLayout.height || 800
+            }).then(function(dataUrl) {
+                if (window.AndroidBridge) {
+                    window.AndroidBridge.onImageExported(JSON.stringify({
+                        format: format,
+                        filename: filename || 'bar_chart',
+                        dataUrl: dataUrl
+                    }));
+                }
+            }).catch(function(error) {
+                if (window.AndroidBridge) {
+                    window.AndroidBridge.onPlotError('Export failed: ' + error.message);
+                }
+            });
+        },
+
         getDefaultLayout: function() {
             return {
                 title: 'Protein Expression',
@@ -233,15 +255,8 @@ if (typeof Plotly === 'undefined') {
 
         getDefaultConfig: function() {
             return {
-                displayModeBar: true,
-                displaylogo: false,
-                responsive: true,
-                modeBarButtonsToRemove: [
-                    'sendDataToCloud',
-                    'editInChartStudio',
-                    'lasso2d',
-                    'select2d'
-                ]
+                displayModeBar: false,
+                responsive: true
             };
         },
 

@@ -1,0 +1,29 @@
+{
+  "differentialForm": {
+    "_primaryIDs": "Protein IDs",
+    "_geneNames": "Gene names",
+    "_foldChange": "Log2 fold change",
+    "_transformFC": false,
+    "_significant": "-Log p-value",
+    "_transformSignificant": false,
+    "_comparison": "CurtainSetComparison",
+    "_comparisonSelect": "1",
+    "_reverseFoldChange": false
+  },
+  "rawForm": {
+    "_primaryIDs": "T: Protein IDs",
+    "_samples": [
+      "Sample1",
+      "Sample2"
+    ]
+  },
+  "settings": {
+    "currentID": "f4b009f3-ac3c-470a-a68b-55fcadf68d0f",
+    "pCutoff": 0.05,
+    "log2FCCutoff": 0.6,
+    "description": "TP fixture test",
+    "version": 2
+  },
+  "password": "",
+  "fetchUniProt": true
+}

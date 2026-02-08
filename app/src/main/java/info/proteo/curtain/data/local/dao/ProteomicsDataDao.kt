@@ -12,6 +12,7 @@ import info.proteo.curtain.data.local.entity.PrimaryIdsMapEntity
 import info.proteo.curtain.data.local.entity.ProcessedProteomicsDataEntity
 import info.proteo.curtain.data.local.entity.ProteomicsDataMetadataEntity
 import info.proteo.curtain.data.local.entity.RawProteomicsDataEntity
+import info.proteo.curtain.data.local.entity.UniProtEntryEntity
 
 @Dao
 interface ProteomicsDataDao {
@@ -51,6 +52,15 @@ interface ProteomicsDataDao {
 
     @Query("SELECT * FROM processed_proteomics_data WHERE comparison = :comparison")
     suspend fun getProcessedDataByComparison(comparison: String): List<ProcessedProteomicsDataEntity>
+
+    @Query("SELECT * FROM processed_proteomics_data WHERE accession = :accession")
+    suspend fun getProcessedDataByAccession(accession: String): List<ProcessedProteomicsDataEntity>
+
+    @Query("SELECT * FROM processed_proteomics_data WHERE accession LIKE '%' || :accession || '%'")
+    suspend fun getProcessedDataByAccessionContaining(accession: String): List<ProcessedProteomicsDataEntity>
+
+    @Query("SELECT DISTINCT accession FROM processed_proteomics_data WHERE accession IS NOT NULL ORDER BY accession")
+    suspend fun getDistinctAccessions(): List<String>
 
     @Query("SELECT * FROM processed_proteomics_data")
     suspend fun getAllProcessedData(): List<ProcessedProteomicsDataEntity>
@@ -111,4 +121,16 @@ interface ProteomicsDataDao {
 
     @Query("DELETE FROM curtain_metadata")
     suspend fun deleteCurtainMetadata()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUniProtEntries(entries: List<UniProtEntryEntity>)
+
+    @Query("SELECT dataJson FROM uniprot_entries WHERE accession = :accession LIMIT 1")
+    suspend fun getUniProtDataJson(accession: String): String?
+
+    @Query("SELECT * FROM uniprot_entries WHERE accession = :accession LIMIT 1")
+    suspend fun getUniProtEntry(accession: String): UniProtEntryEntity?
+
+    @Query("DELETE FROM uniprot_entries")
+    suspend fun deleteAllUniProtEntries()
 }

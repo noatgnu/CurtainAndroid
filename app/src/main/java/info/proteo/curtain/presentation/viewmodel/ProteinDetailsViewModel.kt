@@ -8,6 +8,7 @@ import info.proteo.curtain.domain.model.CurtainData
 import info.proteo.curtain.domain.model.SelectionGroup
 import info.proteo.curtain.domain.repository.SelectionGroupRepository
 import info.proteo.curtain.domain.service.CurtainDataService
+import info.proteo.curtain.presentation.ui.curtain.AccessionGroup
 import info.proteo.curtain.presentation.ui.curtain.ProteinInfo
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -19,6 +20,7 @@ class ProteinDetailsViewModel @Inject constructor(
     private val selectionGroupRepository: SelectionGroupRepository,
     private val curtainDataService: CurtainDataService,
     private val proteomicsDataService: info.proteo.curtain.domain.service.ProteomicsDataService,
+    private val proteinMappingService: info.proteo.curtain.domain.service.ProteinMappingService,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -33,6 +35,9 @@ class ProteinDetailsViewModel @Inject constructor(
 
     private val _selectionGroups = MutableStateFlow<List<SelectionGroup>>(emptyList())
     val selectionGroups: StateFlow<List<SelectionGroup>> = _selectionGroups.asStateFlow()
+
+    private val _sequenceCache = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val sequenceCache: StateFlow<Map<String, String?>> = _sequenceCache.asStateFlow()
 
     fun setLinkId(linkId: String) {
         if (_curtainLinkId.value != linkId) {
@@ -52,11 +57,44 @@ class ProteinDetailsViewModel @Inject constructor(
         if (query.isEmpty()) {
             allProteins
         } else {
+            val isPTM = data.differentialForm.isPTM
             allProteins.filter { protein ->
                 protein.primaryId.contains(query, ignoreCase = true) ||
-                        protein.geneName?.contains(query, ignoreCase = true) == true
+                        protein.geneName?.contains(query, ignoreCase = true) == true ||
+                        (isPTM && protein.accession?.contains(query, ignoreCase = true) == true) ||
+                        (isPTM && protein.position?.contains(query, ignoreCase = true) == true)
             }
         }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val accessionGroups: StateFlow<List<AccessionGroup>> = combine(
+        proteins,
+        _curtainData
+    ) { proteinList, data ->
+        if (data == null || !data.differentialForm.isPTM) return@combine emptyList()
+
+        proteinList
+            .groupBy { it.accession ?: "Unknown" }
+            .map { (accession, sites) ->
+                val geneName = sites.firstOrNull()?.geneName
+                AccessionGroup(
+                    accession = accession,
+                    geneName = geneName,
+                    sites = sites.sortedWith(
+                        compareByDescending<ProteinInfo> { it.isSignificant }
+                            .thenBy { it.position ?: "" }
+                    ),
+                    significantCount = sites.count { it.isSignificant }
+                )
+            }
+            .sortedWith(
+                compareByDescending<AccessionGroup> { it.significantCount }
+                    .thenByDescending { it.sites.size }
+            )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -70,6 +108,36 @@ class ProteinDetailsViewModel @Inject constructor(
     fun setCurtainData(data: CurtainData) {
         _curtainData.value = data
         _selectionGroups.value = extractSelectionGroupsFromCurtainData(data)
+    }
+
+    fun fetchSequencesForAccessions(accessions: Set<String>) {
+        val linkId = _curtainLinkId.value
+        if (linkId.isEmpty()) return
+
+        viewModelScope.launch {
+            val newCache = mutableMapOf<String, String?>()
+            for (accession in accessions) {
+                if (!_sequenceCache.value.containsKey(accession)) {
+                    val sequence = proteomicsDataService.getUniProtSequence(linkId, accession)
+                    newCache[accession] = sequence
+                }
+            }
+            if (newCache.isNotEmpty()) {
+                _sequenceCache.value = _sequenceCache.value + newCache
+            }
+        }
+    }
+
+    fun fetchSequenceForVariant(variantId: String) {
+        val linkId = _curtainLinkId.value
+        if (linkId.isEmpty()) return
+
+        viewModelScope.launch {
+            val sequence = proteomicsDataService.getUniProtSequence(linkId, variantId)
+            if (sequence != null) {
+                _sequenceCache.value = _sequenceCache.value + (variantId to sequence)
+            }
+        }
     }
 
     private fun extractSelectionGroupsFromCurtainData(data: CurtainData): List<SelectionGroup> {
@@ -147,43 +215,42 @@ class ProteinDetailsViewModel @Inject constructor(
 
         val dataByProtein = allData.groupBy { it.primaryId }
 
-        dataByProtein.forEach { (proteinId, proteinDataList) ->
-            val proteinData = proteinDataList.firstOrNull()
-            if (proteinData != null) {
-                var geneName: String? = null
+        for ((proteinId, proteinDataList) in dataByProtein) {
+            val proteinData = proteinDataList.firstOrNull() ?: continue
+            var geneName: String? = proteinData.geneNames?.takeIf { it.isNotEmpty() }
 
-                if (data.fetchUniprot) {
-                    geneName = getGeneNameFromUniProt(proteinId, data)
-                }
-
-                if (geneName.isNullOrEmpty()) {
-                    geneName = proteinData.geneNames?.takeIf { it.isNotEmpty() }
-                }
-
-                val fc = proteinData.foldChange
-                val p = proteinData.significant
-
-                val isSignificant = if (fc != null && p != null) {
-                    p < pCutoff && abs(fc) > log2FCCutoff
-                } else {
-                    false
-                }
-
-                val proteinGroups = groups.filter { group ->
-                    proteinId in group.proteins
-                }
-
-                proteins.add(
-                    ProteinInfo(
-                        primaryId = proteinId,
-                        geneName = geneName,
-                        log2FC = fc,
-                        pValue = p,
-                        isSignificant = isSignificant,
-                        selectionGroups = proteinGroups
-                    )
-                )
+            if (geneName.isNullOrEmpty()) {
+                geneName = proteinMappingService.getGeneNameFromPrimaryId(linkId, proteinId)
             }
+
+            val fc = proteinData.foldChange
+            val p = proteinData.significant
+
+            val isSignificant = if (fc != null && p != null) {
+                p < pCutoff && abs(fc) > log2FCCutoff
+            } else {
+                false
+            }
+
+            val proteinGroups = groups.filter { group ->
+                proteinId in group.proteins
+            }
+
+            proteins.add(
+                ProteinInfo(
+                    primaryId = proteinId,
+                    geneName = geneName,
+                    log2FC = fc,
+                    pValue = p,
+                    isSignificant = isSignificant,
+                    selectionGroups = proteinGroups,
+                    accession = proteinData.accession,
+                    position = proteinData.position,
+                    positionPeptide = proteinData.positionPeptide,
+                    peptideSequence = proteinData.peptideSequence,
+                    score = proteinData.score
+                )
+            )
         }
 
         return proteins.sortedWith(
@@ -192,48 +259,4 @@ class ProteinDetailsViewModel @Inject constructor(
         )
     }
 
-    private fun getUniprotFromPrimary(id: String, curtainData: CurtainData): Map<String, Any>? {
-        val uniprotDB = curtainData.extraData?.uniprot?.db as? Map<String, Any>
-        val dataMap = curtainData.extraData?.uniprot?.dataMap as? Map<String, Any>
-        val accMap = curtainData.extraData?.uniprot?.accMap as? Map<String, Any>
-
-        if (uniprotDB == null) return null
-
-        if (uniprotDB.containsKey(id)) {
-            return uniprotDB[id] as? Map<String, Any>
-        }
-
-        if (accMap != null && accMap.containsKey(id)) {
-            val alternatives = accMap[id] as? List<*>
-            if (alternatives != null) {
-                for (alt in alternatives) {
-                    if (dataMap != null && dataMap.containsKey(alt)) {
-                        val canonicalEntry = dataMap[alt] as? String
-                        if (canonicalEntry != null && uniprotDB.containsKey(canonicalEntry)) {
-                            return uniprotDB[canonicalEntry] as? Map<String, Any>
-                        }
-                    }
-                }
-            }
-        }
-
-        return null
-    }
-
-    private fun getGeneNameFromUniProt(id: String, curtainData: CurtainData): String? {
-        val uniprotRecord = getUniprotFromPrimary(id, curtainData)
-        if (uniprotRecord != null) {
-            val geneNames = uniprotRecord["Gene Names"] as? String
-            if (!geneNames.isNullOrEmpty()) {
-                val firstGeneName = geneNames.split(" ", ";", "\\")
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                    .firstOrNull()
-                if (!firstGeneName.isNullOrEmpty()) {
-                    return firstGeneName
-                }
-            }
-        }
-        return null
-    }
 }

@@ -68,7 +68,6 @@ import info.proteo.curtain.presentation.utils.DeviceUtils
 import info.proteo.curtain.presentation.viewmodel.CrossDatasetSearchViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
-import kotlin.math.abs
 
 @Composable
 fun CrossDatasetResultsScreen(
@@ -155,6 +154,8 @@ private fun TabletResultsScreen(
 
         VerticalDivider(modifier = Modifier.fillMaxHeight())
 
+        val isPTMResults = searchResults?.proteinSummaries?.firstOrNull()?.position != null
+
         Column(
             modifier = Modifier
                 .width(220.dp)
@@ -163,8 +164,9 @@ private fun TabletResultsScreen(
         ) {
             TopAppBar(
                 title = {
+                    val label = if (isPTMResults) "Sites Found" else "Proteins Found"
                     Text(
-                        "Proteins Found (${searchResults?.proteinSummaries?.size ?: 0})",
+                        "$label (${searchResults?.proteinSummaries?.size ?: 0})",
                         style = MaterialTheme.typography.titleSmall
                     )
                 },
@@ -307,15 +309,17 @@ private fun PhoneResultsScreen(
     val selectedSummary = searchResults?.proteinSummaries?.find {
         (it.primaryId ?: it.searchTerm) == (selectedProtein?.primaryId ?: selectedProtein?.searchTerm)
     }
+    val isPTMResultsPhone = searchResults?.proteinSummaries?.firstOrNull()?.position != null
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
+                    val resultsLabel = if (isPTMResultsPhone) "Sites Found" else "Proteins Found"
                     Text(
                         when (currentPanel) {
                             0 -> "Saved Searches"
-                            1 -> "Proteins Found (${searchResults?.proteinSummaries?.size ?: 0})"
+                            1 -> "$resultsLabel (${searchResults?.proteinSummaries?.size ?: 0})"
                             else -> selectedSummary?.geneName ?: selectedSummary?.primaryId ?: "Dataset vs Comparison"
                         }
                     )
@@ -383,7 +387,7 @@ private fun PhoneResultsScreen(
                                         fontWeight = FontWeight.Medium
                                     )
                                     Text(
-                                        "${searchResults!!.proteinSummaries.size} proteins found",
+                                        "${searchResults!!.proteinSummaries.size} ${if (isPTMResultsPhone) "sites" else "proteins"} found",
                                         style = MaterialTheme.typography.bodySmall
                                     )
                                 }
@@ -603,6 +607,8 @@ private fun ProteinSummaryList(
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
+    val isPTM = remember(summaries) { summaries.firstOrNull()?.position != null }
+
     val filteredSummaries = remember(summaries, searchQuery) {
         if (searchQuery.isEmpty()) {
             summaries
@@ -610,7 +616,9 @@ private fun ProteinSummaryList(
             summaries.filter { summary ->
                 summary.primaryId?.contains(searchQuery, ignoreCase = true) == true ||
                         summary.geneName?.contains(searchQuery, ignoreCase = true) == true ||
-                        summary.searchTerm.contains(searchQuery, ignoreCase = true)
+                        summary.searchTerm.contains(searchQuery, ignoreCase = true) ||
+                        summary.position?.contains(searchQuery, ignoreCase = true) == true ||
+                        summary.accession?.contains(searchQuery, ignoreCase = true) == true
             }
         }
     }
@@ -622,7 +630,7 @@ private fun ProteinSummaryList(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 4.dp),
-            placeholder = { Text("Filter proteins...") },
+            placeholder = { Text(if (isPTM) "Filter sites..." else "Filter proteins...") },
             singleLine = true
         )
 
@@ -700,22 +708,71 @@ private fun ProteinSummaryItem(
                     }
                 }
 
-                if (hasGeneName && summary.primaryId != null) {
-                    Text(
-                        text = summary.primaryId,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                } else if (!hasGeneName && summary.primaryId != null && summary.primaryId != displayName) {
-                    Text(
-                        text = "(${summary.searchTerm})",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (summary.position != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = summary.position,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.primary
+                        )
+                        summary.accession?.let { acc ->
+                            Text(
+                                text = acc,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        summary.averageFoldChange?.let { fc ->
+                            Text(
+                                text = String.format("FC: %.2f", fc),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = when {
+                                    fc > 0 -> Color(0xFFD32F2F)
+                                    fc < 0 -> Color(0xFF2196F3)
+                                    else -> if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                                            else MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                        summary.score?.let { s ->
+                            Text(
+                                text = String.format("Score: %.1f", s),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    }
+                } else {
+                    if (hasGeneName && summary.primaryId != null) {
+                        Text(
+                            text = summary.primaryId,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (!hasGeneName && summary.primaryId != null && summary.primaryId != displayName) {
+                        Text(
+                            text = "(${summary.searchTerm})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))

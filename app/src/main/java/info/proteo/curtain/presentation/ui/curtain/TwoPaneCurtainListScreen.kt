@@ -62,6 +62,7 @@ fun TwoPaneCurtainListScreen(
     val collectionSessions by curtainViewModel.collectionSessions.collectAsState()
     val selectedSessionIds by curtainViewModel.selectedSessionIds.collectAsState()
     val selectionModeCollectionId by curtainViewModel.selectionModeCollectionId.collectAsState()
+    val curtainTypeFilter by curtainViewModel.curtainTypeFilter.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedCurtain by remember { mutableStateOf<CurtainEntity?>(null) }
@@ -150,7 +151,11 @@ fun TwoPaneCurtainListScreen(
                     onDeselectAllInCollection = { curtainViewModel.deselectAllSessions(it) },
                     onDownloadSelectedInCollection = { curtainViewModel.downloadSelectedSessions(it) },
                     onLoadExample = { curtainViewModel.loadExampleCurtain() },
+                    onLoadPTMExample = { curtainViewModel.loadExamplePTMCurtain() },
+                    onLoadBothExamples = { curtainViewModel.loadBothExampleCurtains() },
                     onLoadExampleCollection = { curtainViewModel.loadExampleCollection() },
+                    curtainTypeFilter = curtainTypeFilter,
+                    onCurtainTypeFilterChange = { curtainViewModel.updateCurtainTypeFilter(it) },
                     modifier = Modifier.weight(1f)
                 )
             }

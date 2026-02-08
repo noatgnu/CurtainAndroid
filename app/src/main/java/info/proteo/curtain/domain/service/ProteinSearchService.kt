@@ -61,7 +61,11 @@ class ProteinSearchService @Inject constructor(
                         log2FC = fc,
                         pValue = p,
                         isSignificant = isSignificant,
-                        matchType = matchType
+                        matchType = matchType,
+                        accession = proteinData.accession,
+                        position = proteinData.position,
+                        peptideSequence = proteinData.peptideSequence,
+                        score = proteinData.score
                     )
                 )
             }
@@ -138,10 +142,15 @@ class ProteinSearchService @Inject constructor(
                                     log2FC = fc,
                                     pValue = p,
                                     isSignificant = isSignificant,
-                                    matchType = if (searchType == SearchType.GENE_NAMES)
-                                        SearchMatchType.EXACT_GENE_NAME
-                                    else
-                                        SearchMatchType.EXACT_PROTEIN_ID
+                                    matchType = when (searchType) {
+                                        SearchType.GENE_NAMES -> SearchMatchType.EXACT_GENE_NAME
+                                        SearchType.ACCESSION -> SearchMatchType.EXACT_PROTEIN_ID
+                                        SearchType.PRIMARY_IDS -> SearchMatchType.EXACT_PROTEIN_ID
+                                    },
+                                    accession = proteinData.accession,
+                                    position = proteinData.position,
+                                    peptideSequence = proteinData.peptideSequence,
+                                    score = proteinData.score
                                 )
                             )
                             } else {
@@ -281,7 +290,11 @@ class ProteinSearchService @Inject constructor(
                         log2FC = fc,
                         pValue = p,
                         isSignificant = isSignificant,
-                        matchType = SearchMatchType.EXACT_PROTEIN_ID
+                        matchType = SearchMatchType.EXACT_PROTEIN_ID,
+                        accession = proteinData.accession,
+                        position = proteinData.position,
+                        peptideSequence = proteinData.peptideSequence,
+                        score = proteinData.score
                     )
                 )
             }
@@ -294,16 +307,36 @@ class ProteinSearchService @Inject constructor(
     }
 
     fun exportSearchResults(results: List<SearchResult>): String {
-        val header = "Protein ID,Gene Name,Log2FC,P-Value,Significant,Match Type"
+        val hasPTM = results.any { it.accession != null }
+        val header = if (hasPTM) {
+            "Protein ID,Gene Name,Accession,Position,Peptide Sequence,Score,Log2FC,P-Value,Significant,Match Type"
+        } else {
+            "Protein ID,Gene Name,Log2FC,P-Value,Significant,Match Type"
+        }
         val rows = results.map { result ->
-            listOf(
-                result.proteinId,
-                result.geneName ?: "",
-                result.log2FC?.toString() ?: "",
-                result.pValue?.toString() ?: "",
-                result.isSignificant.toString(),
-                result.matchType.name
-            ).joinToString(",")
+            if (hasPTM) {
+                listOf(
+                    result.proteinId,
+                    result.geneName ?: "",
+                    result.accession ?: "",
+                    result.position ?: "",
+                    result.peptideSequence ?: "",
+                    result.score?.toString() ?: "",
+                    result.log2FC?.toString() ?: "",
+                    result.pValue?.toString() ?: "",
+                    result.isSignificant.toString(),
+                    result.matchType.name
+                ).joinToString(",")
+            } else {
+                listOf(
+                    result.proteinId,
+                    result.geneName ?: "",
+                    result.log2FC?.toString() ?: "",
+                    result.pValue?.toString() ?: "",
+                    result.isSignificant.toString(),
+                    result.matchType.name
+                ).joinToString(",")
+            }
         }
 
         return (listOf(header) + rows).joinToString("\n")

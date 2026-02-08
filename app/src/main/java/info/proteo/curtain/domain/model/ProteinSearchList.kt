@@ -16,7 +16,11 @@ data class SearchResult(
     val log2FC: Double?,
     val pValue: Double?,
     val isSignificant: Boolean,
-    val matchType: SearchMatchType
+    val matchType: SearchMatchType,
+    val accession: String? = null,
+    val position: String? = null,
+    val peptideSequence: String? = null,
+    val score: Double? = null
 )
 
 enum class SearchMatchType {

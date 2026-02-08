@@ -27,6 +27,7 @@ class ProteinSearchViewModel @Inject constructor(
     private val searchListRepository: ProteinSearchListRepository,
     private val dataFilterListRepository: DataFilterListRepository,
     private val proteomicsDataService: info.proteo.curtain.domain.service.ProteomicsDataService,
+    private val proteinMappingService: info.proteo.curtain.domain.service.ProteinMappingService,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -74,10 +75,24 @@ class ProteinSearchViewModel @Inject constructor(
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+    private val _searchStatus = MutableStateFlow<String?>(null)
+    val searchStatus: StateFlow<String?> = _searchStatus.asStateFlow()
+
+    private val _noResultsFound = MutableStateFlow(false)
+    val noResultsFound: StateFlow<Boolean> = _noResultsFound.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private val _curtainData = MutableStateFlow<CurtainData?>(null)
+
+    val isPTM: StateFlow<Boolean> = _curtainData.map { data ->
+        data?.differentialForm?.isPTM ?: false
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
 
     private val _availableSuggestions = MutableStateFlow<List<String>>(emptyList())
     val availableSuggestions: StateFlow<List<String>> = _availableSuggestions.asStateFlow()
@@ -133,12 +148,23 @@ class ProteinSearchViewModel @Inject constructor(
         val data = _curtainData.value ?: return
         allSuggestions = when (_searchType.value) {
             SearchType.GENE_NAMES -> {
-                data.extraData?.data?.allGenes ?: emptyList()
+                val genes = data.extraData?.data?.allGenes ?: emptyList()
+                if (genes.isEmpty()) {
+                    val db = proteomicsDataService.getDatabaseForLinkId(data.linkId)
+                    val allData = db.proteomicsDataDao().getAllProcessedData()
+                    allData.mapNotNull { it.geneNames }.flatMap { it.split(";") }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                } else {
+                    genes
+                }
             }
             SearchType.PRIMARY_IDS -> {
                 val db = proteomicsDataService.getDatabaseForLinkId(data.linkId)
                 val allData = db.proteomicsDataDao().getAllProcessedData()
                 allData.map { it.primaryId }.distinct()
+            }
+            SearchType.ACCESSION -> {
+                val db = proteomicsDataService.getDatabaseForLinkId(data.linkId)
+                db.proteomicsDataDao().getDistinctAccessions()
             }
         }
         _availableSuggestions.value = emptyList()
@@ -227,9 +253,12 @@ class ProteinSearchViewModel @Inject constructor(
         viewModelScope.launch {
             _isSearching.value = true
             _error.value = null
+            _noResultsFound.value = false
+            _searchStatus.value = "Parsing search terms..."
 
             try {
-                val resultsMap = searchService.batchSearchProteins(
+                _searchStatus.value = "Searching proteins..."
+                var resultsMap = searchService.batchSearchProteins(
                     curtainData = data,
                     searchInput = _searchQuery.value,
                     searchType = _searchType.value,
@@ -238,7 +267,22 @@ class ProteinSearchViewModel @Inject constructor(
                     advancedFiltering = _advancedFiltering.value
                 )
 
-                android.util.Log.d("ProteinSearchVM", "Search service returned ${resultsMap.size} result groups")
+                if (resultsMap.isEmpty() && data.differentialForm.isPTM && _searchType.value == SearchType.GENE_NAMES) {
+                    _searchStatus.value = "Rebuilding protein mappings..."
+                    proteinMappingService.clearMappingsForLinkId(data.linkId)
+                    proteinMappingService.ensureMappingsExist(data)
+                    _searchStatus.value = "Retrying search..."
+                    resultsMap = searchService.batchSearchProteins(
+                        curtainData = data,
+                        searchInput = _searchQuery.value,
+                        searchType = _searchType.value,
+                        useRegex = _useRegex.value,
+                        significantOnly = _significantOnly.value,
+                        advancedFiltering = _advancedFiltering.value
+                    )
+                }
+
+                _searchStatus.value = "Processing results..."
 
                 val batchResults = resultsMap.map { (searchTerm, results) ->
                     BatchSearchResultGroup(
@@ -248,12 +292,18 @@ class ProteinSearchViewModel @Inject constructor(
                     )
                 }
 
-                android.util.Log.d("ProteinSearchVM", "Setting ${batchResults.size} batch result groups in state")
                 _batchSearchResults.value = batchResults
-                android.util.Log.d("ProteinSearchVM", "Batch search results set, current value: ${_batchSearchResults.value.size} groups")
+
+                if (batchResults.isEmpty()) {
+                    _noResultsFound.value = true
+                    _searchStatus.value = null
+                } else {
+                    _searchStatus.value = null
+                }
             } catch (e: Exception) {
                 _error.value = "Batch search failed: ${e.message}"
                 _batchSearchResults.value = emptyList()
+                _searchStatus.value = null
             } finally {
                 _isSearching.value = false
             }

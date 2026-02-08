@@ -12,7 +12,8 @@ import kotlin.math.min
 
 @Singleton
 class VolcanoPlotDataService @Inject constructor(
-    private val proteomicsDataService: ProteomicsDataService
+    private val proteomicsDataService: ProteomicsDataService,
+    private val proteinMappingService: ProteinMappingService
 ) {
 
     data class VolcanoProcessResult(
@@ -38,15 +39,18 @@ class VolcanoPlotDataService @Inject constructor(
 
         val db = proteomicsDataService.getDatabaseForLinkId(curtainData.linkId)
         val processedDataEntities = db.proteomicsDataDao().getAllProcessedData()
+        val linkId = curtainData.linkId
 
         val differentialData = processedDataEntities.map { entity ->
             mutableMapOf<String, Any>(
                 idColumn to entity.primaryId
             ).apply {
-                entity.geneNames?.let { put(geneColumn, it) }
+                entity.geneNames?.takeIf { it.isNotEmpty() }?.let { put(geneColumn, it) }
                 entity.foldChange?.let { put(fcColumn, it) }
                 entity.significant?.let { put(sigColumn, it) }
                 put(comparisonColumn, entity.comparison)
+                entity.accession?.let { put(diffForm.accession, it) }
+                entity.position?.let { put(diffForm.position, it) }
             }
         }
 
@@ -58,7 +62,7 @@ class VolcanoPlotDataService @Inject constructor(
         var actualSigKey: String? = null
         var actualIdKey: String? = null
 
-        fun processRow(rowItem: Any?, mapKey: String?) {
+        suspend fun processRow(rowItem: Any?, mapKey: String?) {
             if (rowItem == null) return
 
             val row: Map<String, Any>? = when (rowItem) {
@@ -83,7 +87,13 @@ class VolcanoPlotDataService @Inject constructor(
                 if (id.isNullOrEmpty()) id = mapKey
                 
                 if (!id.isNullOrEmpty()) {
-                    val gene = resolveGeneName(id!!, row, geneColumn, curtainData)
+                    var gene: String? = row[geneColumn]?.toString()?.takeIf { it.isNotEmpty() }
+                    if (gene.isNullOrEmpty()) {
+                        gene = proteinMappingService.getGeneNameFromPrimaryId(linkId, id!!)
+                    }
+                    if (gene.isNullOrEmpty()) {
+                        gene = id
+                    }
                     val rawFcValue = extractDoubleValue(if (actualFcKey != null) row[actualFcKey] else null)
                     val rawSigValue = extractDoubleValue(if (actualSigKey != null) row[actualSigKey] else null)
 
@@ -132,7 +142,7 @@ class VolcanoPlotDataService @Inject constructor(
                                 selections.add("Background")
                                 colors.add("#a4a2a2") 
                             } else {
-                                val (group, _) = getSignificantGroup(fcValue, sigValue, settings, comparisonValue)
+                                val (group, _) = getSignificantGroup(fcValue, sigValue, settings, comparisonValue, diffForm.isPTM)
                                 selections.add(group)
                                 
                                 if (!colorMap.containsKey(group)) {
@@ -154,6 +164,10 @@ class VolcanoPlotDataService @Inject constructor(
                             "comparison" to comparisonValue, "selections" to selections,
                             "colors" to colors, "color" to (colors.firstOrNull() ?: "#808080")
                         )
+                        if (diffForm.isPTM) {
+                            row[diffForm.accession]?.toString()?.let { dataPoint["accession"] = it }
+                            row[diffForm.position]?.toString()?.let { dataPoint["position"] = it }
+                        }
                         if (settings.customVolcanoTextCol.isNotEmpty()) {
                             row[settings.customVolcanoTextCol]?.let { dataPoint["customText"] = it.toString() }
                         }
@@ -163,7 +177,9 @@ class VolcanoPlotDataService @Inject constructor(
             }
         }
 
-        differentialData.forEach { row -> processRow(row, null) }
+        for (row in differentialData) {
+            processRow(row, null)
+        }
         
         val significantOrSelectedPoints = mutableListOf<Map<String, Any>>()
         val nonSignificantPoints = mutableListOf<Map<String, Any>>()
@@ -241,61 +257,16 @@ class VolcanoPlotDataService @Inject constructor(
         return data
     }
 
-    private fun getUniprotFromPrimary(id: String, curtainData: CurtainData): Map<String, Any>? {
-        val uniprotDB = curtainData.extraData?.uniprot?.db as? Map<String, Any>
-        val dataMap = curtainData.extraData?.uniprot?.dataMap as? Map<String, Any>
-        val accMap = curtainData.extraData?.uniprot?.accMap as? Map<String, Any>
-
-        if (uniprotDB == null) return null
-
-        if (uniprotDB.containsKey(id)) {
-            return uniprotDB[id] as? Map<String, Any>
-        }
-
-        if (accMap != null && accMap.containsKey(id)) {
-            val alternatives = accMap[id] as? List<*>
-            if (alternatives != null) {
-                for (alt in alternatives) {
-                    if (dataMap != null && dataMap.containsKey(alt)) {
-                        val canonicalEntry = dataMap[alt] as? String
-                        if (canonicalEntry != null && uniprotDB.containsKey(canonicalEntry)) {
-                            return uniprotDB[canonicalEntry] as? Map<String, Any>
-                        }
-                    }
-                }
-            }
-        }
-
-        return null
-    }
-
-    private fun resolveGeneName(id: String, row: Map<String, Any>, geneColumn: String, curtainData: CurtainData): String {
-        var gene = id
-
-        if (curtainData.fetchUniprot) {
-            val uniprotRecord = getUniprotFromPrimary(id, curtainData)
-            if (uniprotRecord != null) {
-                val geneNames = uniprotRecord["Gene Names"] as? String
-                if (!geneNames.isNullOrEmpty()) {
-                    val firstGeneName = geneNames.split(" ", ";", "\\\\")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                        .firstOrNull()
-                    if (!firstGeneName.isNullOrEmpty()) {
-                        return firstGeneName
-                    }
-                }
-            }
-        }
-
+    private fun resolveGeneName(id: String, row: Map<String, Any>, geneColumn: String): String {
         if (geneColumn.isNotEmpty()) {
-            (row[geneColumn]?.toString())?.takeIf { it.isNotEmpty() }?.let {
-                gene = it
+            val rowGeneName = row[geneColumn]?.toString()?.takeIf { it.isNotEmpty() }
+            if (rowGeneName != null) {
+                return rowGeneName
             }
         }
-
-        return gene
+        return id
     }
+
 
     private fun extractDoubleValue(value: Any?): Double {
         return when (value) {
@@ -351,7 +322,7 @@ class VolcanoPlotDataService @Inject constructor(
         return currentPosition
     }
 
-    private fun getSignificantGroup(fcValue: Double, sigValue: Double, settings: CurtainSettings, comparison: String): Pair<String, String> {
+    private fun getSignificantGroup(fcValue: Double, sigValue: Double, settings: CurtainSettings, comparison: String, isPTM: Boolean = false): Pair<String, String> {
         val ylog = -log10(settings.pCutoff)
         val groups = mutableListOf<String>()
         var position = ""
@@ -369,7 +340,12 @@ class VolcanoPlotDataService @Inject constructor(
             groups.add("FC <= ${settings.log2FCCutoff}")
             position += "FC <= "
         }
-        return Pair("${groups.joinToString(";")} ($comparison)", position)
+        val groupName = if (isPTM) {
+            groups.joinToString(";")
+        } else {
+            "${groups.joinToString(";")} ($comparison)"
+        }
+        return Pair(groupName, position)
     }
 
     private fun convertDataMapToDict(dataMap: Any): Map<String, Any> {

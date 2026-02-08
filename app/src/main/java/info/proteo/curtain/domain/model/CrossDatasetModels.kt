@@ -43,7 +43,11 @@ data class ProteinSearchSummary(
     val datasetsFoundIn: Int,
     val totalDatasetsSearched: Int,
     val averageFoldChange: Double?,
-    val hasSignificantResult: Boolean
+    val hasSignificantResult: Boolean,
+    val accession: String? = null,
+    val position: String? = null,
+    val peptideSequence: String? = null,
+    val score: Double? = null
 )
 
 data class ProteinDetailedReport(

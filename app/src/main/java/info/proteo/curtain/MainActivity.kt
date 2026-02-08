@@ -53,15 +53,34 @@ class MainActivity : ComponentActivity() {
                 deepLinkResult?.let { result ->
                     when (result) {
                         is DeepLinkResult.CurtainDataset -> {
-                            // navController.navigate("curtain_details/${result.linkId}")
+                            navController.navigate("curtain_details/${result.linkId}") {
+                                popUpTo("main") { inclusive = false }
+                            }
                         }
                         is DeepLinkResult.DOIReference -> {
+                            val route = if (result.sessionId != null) {
+                                "doi_loader/${result.doi}?sessionId=${result.sessionId}"
+                            } else {
+                                "doi_loader/${result.doi}"
+                            }
+                            navController.navigate(route) {
+                                popUpTo("main") { inclusive = false }
+                            }
                         }
                         is DeepLinkResult.ParsedQRData -> {
+                            navController.navigate("curtain_details/${result.linkId}") {
+                                popUpTo("main") { inclusive = false }
+                            }
                         }
                         is DeepLinkResult.CollectionData -> {
+                            navController.navigate("main") {
+                                popUpTo("main") { inclusive = true }
+                            }
                         }
                         is DeepLinkResult.ParsedCollectionQRData -> {
+                            navController.navigate("main") {
+                                popUpTo("main") { inclusive = true }
+                            }
                         }
                     }
                     deepLinkResult = null

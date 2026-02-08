@@ -62,9 +62,7 @@
     <script>
         // Global configuration for Plotly
         Plotly.setPlotConfig({
-            displayModeBar: true,
-            displaylogo: false,
-            modeBarButtonsToRemove: ['sendDataToCloud', 'editInChartStudio']
+            displayModeBar: false
         });
 
         // Android WebView communication interface
@@ -78,10 +76,8 @@
 
                     // Default configuration
                     const defaultConfig = {
-                        displayModeBar: true,
-                        displaylogo: false,
-                        responsive: true,
-                        modeBarButtonsToRemove: ['sendDataToCloud', 'editInChartStudio']
+                        displayModeBar: false,
+                        responsive: true
                     };
 
                     const finalConfig = Object.assign(defaultConfig, config || {});

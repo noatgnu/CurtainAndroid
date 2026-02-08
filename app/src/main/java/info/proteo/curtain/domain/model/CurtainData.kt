@@ -26,10 +26,13 @@ data class CurtainData(
     val description: String get() = settings.description
     
     val curtainType: String get() {
+        if (differentialForm.isPTM) {
+            return "PTM"
+        }
         if (rawForm.samples.isNotEmpty()) {
-            return "TP" // Total Proteome
+            return "TP"
         } else if (differentialForm.comparison.isNotEmpty()) {
-            return "CC" // Comparative Analysis
+            return "CC"
         }
         return "TP"
     }
@@ -113,8 +116,16 @@ data class CurtainDifferentialForm(
     @SerializedName("_transformSignificant") val transformSignificant: Boolean = false,
     @SerializedName("_comparison") val comparison: String = "",
     @SerializedName("_comparisonSelect") val comparisonSelect: List<String> = emptyList(),
-    @SerializedName("_reverseFoldChange") val reverseFoldChange: Boolean = false
-)
+    @SerializedName("_reverseFoldChange") val reverseFoldChange: Boolean = false,
+    @SerializedName("_accession") val accession: String = "",
+    @SerializedName("_position") val position: String = "",
+    @SerializedName("_positionPeptide") val positionPeptide: String = "",
+    @SerializedName("_peptideSequence") val peptideSequence: String = "",
+    @SerializedName("_score") val score: String = "",
+    @SerializedName("_sequence") val sequence: String = ""
+) {
+    val isPTM: Boolean get() = accession.isNotEmpty() || position.isNotEmpty()
+}
 
 data class ExtraData(
     val uniprot: UniprotExtraData? = null,

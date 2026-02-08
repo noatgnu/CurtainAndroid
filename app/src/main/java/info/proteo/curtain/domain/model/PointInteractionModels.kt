@@ -28,7 +28,11 @@ data class ProteinPoint(
     val pValue: Double,
     val negLog10PValue: Double,
     val color: String,
-    val isSignificant: Boolean
+    val isSignificant: Boolean,
+    val accession: String? = null,
+    val position: String? = null,
+    val peptideSequence: String? = null,
+    val score: Double? = null
 )
 
 object DistanceCalculator {

@@ -24,6 +24,15 @@ class IDMappingService @Inject constructor(
         return proteinMappingService.getPrimaryIdsFromSplitId(curtainData.linkId, primaryID)
     }
 
+    suspend fun getPrimaryIDsFromAccessionColumn(
+        accession: String,
+        curtainData: CurtainData
+    ): List<String> {
+        val db = proteomicsDataService.getDatabaseForLinkId(curtainData.linkId)
+        val matchingData = db.proteomicsDataDao().getProcessedDataByAccessionContaining(accession)
+        return matchingData.map { it.primaryId }.distinct()
+    }
+
     suspend fun batchSearchProteins(
         curtainData: CurtainData,
         searchTerms: List<String>,
@@ -48,6 +57,8 @@ class IDMappingService @Inject constructor(
                         getPrimaryIDsFromGeneNames(match, curtainData)
                     SearchType.PRIMARY_IDS ->
                         getPrimaryIDsFromAcc(match, curtainData)
+                    SearchType.ACCESSION ->
+                        getPrimaryIDsFromAccessionColumn(match, curtainData)
                 }
                 android.util.Log.d("IDMappingService", "Match '$match' resolved to ${ids.size} primary IDs")
                 primaryIds.addAll(ids)
@@ -77,7 +88,10 @@ class IDMappingService @Inject constructor(
 
         when (searchType) {
             SearchType.GENE_NAMES -> {
-                val allGenes = curtainData.extraData?.data?.allGenes ?: emptyList()
+                var allGenes = curtainData.extraData?.data?.allGenes ?: emptyList()
+                if (allGenes.isEmpty()) {
+                    allGenes = proteinMappingService.getAllDistinctGeneNames(curtainData.linkId)
+                }
                 allGenes.forEach { geneName ->
                     if (regex.containsMatchIn(geneName)) {
                         matches.add(geneName)
@@ -93,6 +107,15 @@ class IDMappingService @Inject constructor(
                     }
                 }
             }
+            SearchType.ACCESSION -> {
+                val db = proteomicsDataService.getDatabaseForLinkId(curtainData.linkId)
+                val allAccessions = db.proteomicsDataDao().getDistinctAccessions()
+                allAccessions.forEach { accession ->
+                    if (regex.containsMatchIn(accession)) {
+                        matches.add(accession)
+                    }
+                }
+            }
         }
 
         return matches.distinct()
@@ -101,5 +124,6 @@ class IDMappingService @Inject constructor(
 
 enum class SearchType {
     GENE_NAMES,
-    PRIMARY_IDS
+    PRIMARY_IDS,
+    ACCESSION
 }

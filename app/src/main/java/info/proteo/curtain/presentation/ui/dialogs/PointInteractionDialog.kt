@@ -59,14 +59,14 @@ fun PointInteractionDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier
             .fillMaxWidth(0.95f)
-            .fillMaxHeight(0.9f)
+            .wrapContentHeight()
     ) {
         Surface(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.wrapContentHeight()) {
                 PointInteractionHeader(clickData = clickData)
 
                 TabRow(
@@ -90,7 +90,7 @@ fun PointInteractionDialog(
                     )
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.heightIn(max = 400.dp)) {
                     when (selectedTab) {
                         0 -> SelectionTab(
                             clickData = clickData,
@@ -177,17 +177,17 @@ private fun PointInteractionHeader(clickData: VolcanoPointClickData) {
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     proteinDisplayName(clickData.clickedProtein),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
@@ -195,11 +195,24 @@ private fun PointInteractionHeader(clickData: VolcanoPointClickData) {
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                clickData.clickedProtein.accession?.let { acc ->
+                    Text(
+                        "Accession: $acc",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (clickData.nearbyProteins.isNotEmpty()) {
+                    Text(
+                        "${clickData.nearbyProteins.size} nearby proteins found",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalAlignment = Alignment.End
             ) {
                 Text(
                     "FC: ${String.format("%.3f", clickData.clickedProtein.log2FC)}",
@@ -208,18 +221,10 @@ private fun PointInteractionHeader(clickData: VolcanoPointClickData) {
                 )
                 Text(
                     "p: ${String.format("%.2e", clickData.clickedProtein.pValue)}",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
-
-        if (clickData.nearbyProteins.isNotEmpty()) {
-            Text(
-                "${clickData.nearbyProteins.size} nearby proteins found",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }
@@ -268,7 +273,7 @@ private fun SelectionTab(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -381,7 +386,7 @@ private fun AnnotationTab(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -487,7 +492,7 @@ private fun DetailsTab(
 ) {
     LazyColumn(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -600,14 +605,6 @@ private fun ProteinSelectionRow(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(parseColor(protein.color) ?: Color.Gray)
-                    .border(1.dp, Color.White, CircleShape)
-            )
-
             if (protein.isSignificant) {
                 Text("⭐", style = MaterialTheme.typography.labelSmall)
             }
@@ -717,28 +714,47 @@ private fun ProteinDetailCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    proteinDisplayName(protein),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Box(
-                    modifier = Modifier
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(parseColor(protein.color) ?: Color.Gray)
-                        .border(1.dp, Color.White, CircleShape)
-                )
-            }
+            Text(
+                proteinDisplayName(protein),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium
+            )
 
             if (protein.proteinName != null && protein.proteinName != protein.primaryID) {
                 Text(
                     "Protein: ${protein.proteinName}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            protein.accession?.let { acc ->
+                Text(
+                    "Accession: $acc",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            protein.position?.let { pos ->
+                Text(
+                    "Position: $pos",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            protein.peptideSequence?.let { seq ->
+                Text(
+                    "Peptide: $seq",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            protein.score?.let { s ->
+                Text(
+                    "Score: ${String.format("%.4f", s)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -843,17 +859,27 @@ private fun NearbyProteinCard(nearbyProtein: NearbyProtein) {
 }
 
 private fun proteinDisplayName(protein: ProteinPoint): String {
-    return if (!protein.geneNames.isNullOrEmpty() && protein.geneNames != protein.primaryID) {
+    val baseName = if (!protein.geneNames.isNullOrEmpty() && protein.geneNames != protein.primaryID) {
         "${protein.geneNames} (${protein.primaryID})"
     } else {
         protein.primaryID
     }
+    return if (protein.position != null) {
+        "$baseName ${protein.position}"
+    } else {
+        baseName
+    }
 }
 
 private fun generateAnnotationTitle(protein: ProteinPoint): String {
-    return if (!protein.geneNames.isNullOrEmpty() && protein.geneNames != protein.primaryID) {
+    val baseName = if (!protein.geneNames.isNullOrEmpty() && protein.geneNames != protein.primaryID) {
         "${protein.geneNames}(${protein.primaryID})"
     } else {
         protein.primaryID
+    }
+    return if (protein.position != null) {
+        "$baseName ${protein.position}"
+    } else {
+        baseName
     }
 }

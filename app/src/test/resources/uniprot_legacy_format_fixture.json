@@ -1,0 +1,13 @@
+{
+  "Entry": "P54321",
+  "Gene Names": "LEGACY1",
+  "Protein names": "Legacy format protein",
+  "Organism": "Homo sapiens (Human)",
+  "Sequence": "MSTGLQVKPVADLAYAQPFGASEIPRVSVSPGPSRAAPPSPHPSPSSTSSSSASSSPSSPSSSSPSPSPASSPSSPSSPASPSPSASPSSPSSPASPSPSPSSSSSPSSPSSPASPSSPSSPARPSSPRPSPSPSPSPTSPSPSRTPSPSPSPSPSPSHPSPSPSPSSPTPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSP",
+  "Length": "213",
+  "Domain [FT]": "DOMAIN 1..50; /note=\"Test domain\"; DOMAIN 100..150; /note=\"Another domain\"",
+  "Modified residue": "MOD_RES 15; /note=\"Phosphoserine\"; /evidence=\"ECO:0000269|PubMed:12345678\"; MOD_RES 32; /note=\"Phosphothreonine\"; MOD_RES 45; /note=\"Phosphotyrosine\"; MOD_RES 78; /note=\"Phosphoserine\"",
+  "Active site": "ACT_SITE 35; /note=\"Proton acceptor\"",
+  "Binding site": "BINDING 40..42; /note=\"ATP\"",
+  "Alternative products (isoforms)": "Event=Alternative splicing; Named isoforms=2; Name=1; IsoId=P54321-1; Sequence=Displayed; Name=2; IsoId=P54321-2; Sequence=VSP_054321"
+}

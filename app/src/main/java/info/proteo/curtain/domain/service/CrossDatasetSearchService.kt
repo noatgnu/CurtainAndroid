@@ -3,6 +3,7 @@ package info.proteo.curtain.domain.service
 import android.util.Log
 import info.proteo.curtain.data.local.entity.CurtainEntity
 import info.proteo.curtain.domain.database.ProteomicsDataDatabaseManager
+import info.proteo.curtain.domain.model.CurtainData
 import info.proteo.curtain.domain.model.CrossDatasetAdvancedFilterParams
 import info.proteo.curtain.domain.model.CrossDatasetMatrix
 import info.proteo.curtain.domain.model.CrossDatasetSearchConfig
@@ -48,6 +49,12 @@ class CrossDatasetSearchService @Inject constructor(
         _processingStatus.emit(DatasetProcessingStatus(linkId, datasetName, state, message))
     }
 
+    private fun ensureLinkIdMatches(data: CurtainData, entityLinkId: String): CurtainData {
+        if (data.linkId == entityLinkId) return data
+        Log.w(TAG, "CurtainData linkId mismatch: JSON has '${data.linkId}', entity has '$entityLinkId'. Overriding.")
+        return data.copy(_settings = data.settings.copy(currentId = entityLinkId))
+    }
+
     suspend fun getAvailableDatasets(): List<CurtainEntity> {
         return curtainRepository.getAllCurtains().first()
             .filter { it.file != null }
@@ -68,12 +75,15 @@ class CrossDatasetSearchService @Inject constructor(
             }
         }.awaitAll()
 
+        val isPTM = datasetResults.any { it.isPTM }
+
         val proteinSummaries = aggregateResults(
             searchTerms = searchTerms,
             datasetResults = datasetResults,
             totalDatasets = config.datasetLinkIds.size,
             significantOnly = config.significantOnly,
-            advancedFiltering = config.advancedFiltering
+            advancedFiltering = config.advancedFiltering,
+            isPTM = isPTM
         )
 
         Log.d(TAG, "Search complete: found ${proteinSummaries.size} proteins")
@@ -100,36 +110,49 @@ class CrossDatasetSearchService @Inject constructor(
             try {
                 val curtain = curtainRepository.getCurtainById(linkId) ?: return@forEach
                 val datasetDisplayName = curtain.sessionName?.takeIf { it.isNotBlank() } ?: curtain.dataDescription
-                var curtainData = proteomicsDataService.loadCurtainDataFromDatabase(linkId)
+                var curtainData: CurtainData? = proteomicsDataService.loadCurtainDataFromDatabase(linkId)
+                    ?.let { ensureLinkIdMatches(it, linkId) }
                 if (curtainData == null && !curtain.file.isNullOrEmpty()) {
                     val loadResult = curtainDataService.loadCurtainDataFromFile(curtain.file)
                     loadResult.getOrNull()?.let { loadedData ->
-                        proteinMappingService.ensureMappingsExist(loadedData.curtainData)
+                        val corrected = ensureLinkIdMatches(loadedData.curtainData, linkId)
+                        proteinMappingService.ensureMappingsExist(corrected)
                         proteomicsDataService.buildProteomicsDataIfNeeded(
-                            linkId = loadedData.curtainData.linkId,
+                            linkId = linkId,
                             rawTsv = loadedData.rawTsv,
                             processedTsv = loadedData.processedTsv,
-                            rawForm = loadedData.curtainData.rawForm,
-                            differentialForm = loadedData.curtainData.differentialForm,
-                            curtainData = loadedData.curtainData
+                            rawForm = corrected.rawForm,
+                            differentialForm = corrected.differentialForm,
+                            curtainData = corrected
                         )
-                        curtainData = loadedData.curtainData
+                        curtainData = corrected
                     }
                 }
                 if (curtainData == null) return@forEach
 
                 proteinMappingService.ensureMappingsExist(curtainData!!)
 
+                val effectiveSearchInput = if (primaryId != null && curtainData!!.differentialForm.isPTM) {
+                    primaryId
+                } else {
+                    searchTerm
+                }
+                val effectiveSearchType = if (primaryId != null && curtainData!!.differentialForm.isPTM) {
+                    SearchType.PRIMARY_IDS
+                } else {
+                    searchType
+                }
+
                 val searchResultsMap = proteinSearchService.batchSearchProteins(
-                    curtainData = curtainData,
-                    searchInput = searchTerm,
-                    searchType = searchType,
+                    curtainData = curtainData!!,
+                    searchInput = effectiveSearchInput,
+                    searchType = effectiveSearchType,
                     useRegex = false,
                     significantOnly = false,
                     advancedFiltering = null
                 )
 
-                val searchResults = searchResultsMap[searchTerm]
+                val searchResults = searchResultsMap[effectiveSearchInput]
                 if (searchResults.isNullOrEmpty()) {
                     val datasetInfo = DatasetComparisonInfo(
                         linkId = linkId,
@@ -158,7 +181,7 @@ class CrossDatasetSearchService @Inject constructor(
                         val datasetInfo = DatasetComparisonInfo(
                             linkId = linkId,
                             datasetDescription = datasetDisplayName,
-                            comparison = curtainData.settings.currentComparison.ifEmpty { "1" }
+                            comparison = curtainData!!.settings.currentComparison.ifEmpty { "1" }
                         )
 
                         results.add(
@@ -211,33 +234,35 @@ class CrossDatasetSearchService @Inject constructor(
             try {
                 val curtain = curtainRepository.getCurtainById(linkId) ?: return@forEach
                 val datasetDisplayName = curtain.sessionName?.takeIf { it.isNotBlank() } ?: curtain.dataDescription
-                var curtainData = proteomicsDataService.loadCurtainDataFromDatabase(linkId)
+                var curtainData: CurtainData? = proteomicsDataService.loadCurtainDataFromDatabase(linkId)
+                    ?.let { ensureLinkIdMatches(it, linkId) }
 
                 if (curtainData == null && !curtain.file.isNullOrEmpty()) {
                     val loadResult = curtainDataService.loadCurtainDataFromFile(curtain.file)
                     loadResult.getOrNull()?.let { loadedData ->
-                        proteinMappingService.ensureMappingsExist(loadedData.curtainData)
+                        val corrected = ensureLinkIdMatches(loadedData.curtainData, linkId)
+                        proteinMappingService.ensureMappingsExist(corrected)
                         proteomicsDataService.buildProteomicsDataIfNeeded(
-                            linkId = loadedData.curtainData.linkId,
+                            linkId = linkId,
                             rawTsv = loadedData.rawTsv,
                             processedTsv = loadedData.processedTsv,
-                            rawForm = loadedData.curtainData.rawForm,
-                            differentialForm = loadedData.curtainData.differentialForm,
-                            curtainData = loadedData.curtainData
+                            rawForm = corrected.rawForm,
+                            differentialForm = corrected.differentialForm,
+                            curtainData = corrected
                         )
-                        curtainData = loadedData.curtainData
+                        curtainData = corrected
                     }
                 }
 
                 if (curtainData == null) return@forEach
 
-                val comparison = curtainData.settings.currentComparison.ifEmpty { "1" }
+                val comparison = curtainData!!.settings.currentComparison.ifEmpty { "1" }
                 val cells = mutableMapOf<String, MatrixCell>()
 
                 searchResult.proteinSummaries.forEach { summary ->
                     val searchTerm = summary.searchTerm
                     val searchResultsMap = proteinSearchService.batchSearchProteins(
-                        curtainData = curtainData,
+                        curtainData = curtainData!!,
                         searchInput = searchTerm,
                         searchType = searchResult.config.searchType,
                         useRegex = searchResult.config.useRegex,
@@ -273,7 +298,7 @@ class CrossDatasetSearchService @Inject constructor(
                     }
                 }
 
-                val conditionLabels = curtainData.settings.volcanoConditionLabels
+                val conditionLabels = curtainData!!.settings.volcanoConditionLabels
                 val conditionLeft = if (conditionLabels.enabled && conditionLabels.leftCondition.isNotEmpty()) {
                     conditionLabels.leftCondition
                 } else null
@@ -323,6 +348,7 @@ class CrossDatasetSearchService @Inject constructor(
     ): DatasetSearchResult {
         Log.d(TAG, "searchInDataset called for linkId=$linkId with ${searchTerms.size} terms")
         val results = mutableMapOf<String, ProteinDatasetResult>()
+        var datasetIsPTM = false
 
         try {
             val curtain = curtainRepository.getCurtainById(linkId)
@@ -336,7 +362,8 @@ class CrossDatasetSearchService @Inject constructor(
 
             emitStatus(linkId, datasetName, ProcessingState.LOADING, "Checking database...")
 
-            var curtainData = proteomicsDataService.loadCurtainDataFromDatabase(linkId)
+            var curtainData: CurtainData? = proteomicsDataService.loadCurtainDataFromDatabase(linkId)
+                ?.let { ensureLinkIdMatches(it, linkId) }
             if (curtainData == null) {
                 Log.d(TAG, "CurtainData not in database for linkId=$linkId, loading from file")
                 if (curtain.file.isNullOrEmpty()) {
@@ -348,21 +375,22 @@ class CrossDatasetSearchService @Inject constructor(
                 emitStatus(linkId, datasetName, ProcessingState.LOADING, "Parsing file...")
                 val loadResult = curtainDataService.loadCurtainDataFromFile(curtain.file)
                 loadResult.getOrNull()?.let { loadedData ->
+                    val corrected = ensureLinkIdMatches(loadedData.curtainData, linkId)
                     Log.d(TAG, "Loaded from file, building database for linkId=$linkId")
 
                     emitStatus(linkId, datasetName, ProcessingState.BUILDING, "Building protein mappings...")
-                    proteinMappingService.ensureMappingsExist(loadedData.curtainData)
+                    proteinMappingService.ensureMappingsExist(corrected)
 
                     emitStatus(linkId, datasetName, ProcessingState.BUILDING, "Building database...")
                     proteomicsDataService.buildProteomicsDataIfNeeded(
-                        linkId = loadedData.curtainData.linkId,
+                        linkId = linkId,
                         rawTsv = loadedData.rawTsv,
                         processedTsv = loadedData.processedTsv,
-                        rawForm = loadedData.curtainData.rawForm,
-                        differentialForm = loadedData.curtainData.differentialForm,
-                        curtainData = loadedData.curtainData
+                        rawForm = corrected.rawForm,
+                        differentialForm = corrected.differentialForm,
+                        curtainData = corrected
                     )
-                    curtainData = loadedData.curtainData
+                    curtainData = corrected
                 }
                 if (curtainData == null) {
                     Log.e(TAG, "Failed to load curtainData for linkId=$linkId")
@@ -375,7 +403,7 @@ class CrossDatasetSearchService @Inject constructor(
 
             val searchInput = searchTerms.joinToString("\n")
             val searchResultsMap = proteinSearchService.batchSearchProteins(
-                curtainData = curtainData,
+                curtainData = curtainData!!,
                 searchInput = searchInput,
                 searchType = searchType,
                 useRegex = useRegex,
@@ -383,22 +411,48 @@ class CrossDatasetSearchService @Inject constructor(
                 advancedFiltering = null // This is handled in the aggregateResults function
             )
 
+            val isPTM = curtainData!!.differentialForm.isPTM
+            datasetIsPTM = isPTM
+
+            val geneNameCache = mutableMapOf<String, String?>()
+
             searchResultsMap.forEach { (searchTerm, searchResults) ->
                 if (searchResults.isNotEmpty()) {
-                    val firstResult = searchResults.first()
-                    val hasSignificant = searchResults.any { it.isSignificant }
-                    val foldChanges = searchResults.mapNotNull { it.log2FC }
-                    val averageFoldChange = if (foldChanges.isNotEmpty()) foldChanges.average() else null
+                    if (isPTM) {
+                        searchResults.forEach { sr ->
+                            val accKey = sr.accession ?: sr.proteinId
+                            val geneName = geneNameCache.getOrPut(accKey) {
+                                getGeneNameForProtein(accKey, linkId, curtainData!!)
+                            }
+                            results[sr.proteinId] = ProteinDatasetResult(
+                                primaryId = sr.proteinId,
+                                geneName = geneName,
+                                found = true,
+                                hasSignificant = sr.isSignificant,
+                                averageFoldChange = sr.log2FC,
+                                accession = sr.accession,
+                                position = sr.position,
+                                peptideSequence = sr.peptideSequence,
+                                score = sr.score,
+                                originalSearchTerm = searchTerm
+                            )
+                        }
+                    } else {
+                        val firstResult = searchResults.first()
+                        val hasSignificant = searchResults.any { it.isSignificant }
+                        val foldChanges = searchResults.mapNotNull { it.log2FC }
+                        val averageFoldChange = if (foldChanges.isNotEmpty()) foldChanges.average() else null
 
-                    val geneName = getGeneNameForProtein(firstResult.proteinId, linkId, curtainData!!)
+                        val geneName = getGeneNameForProtein(firstResult.proteinId, linkId, curtainData!!)
 
-                    results[searchTerm] = ProteinDatasetResult(
-                        primaryId = firstResult.proteinId,
-                        geneName = geneName,
-                        found = true,
-                        hasSignificant = hasSignificant,
-                        averageFoldChange = averageFoldChange
-                    )
+                        results[searchTerm] = ProteinDatasetResult(
+                            primaryId = firstResult.proteinId,
+                            geneName = geneName,
+                            found = true,
+                            hasSignificant = hasSignificant,
+                            averageFoldChange = averageFoldChange
+                        )
+                    }
                 }
             }
 
@@ -408,8 +462,8 @@ class CrossDatasetSearchService @Inject constructor(
             emitStatus(linkId, "Unknown", ProcessingState.FAILED, e.message)
         }
 
-        Log.d(TAG, "searchInDataset complete for $linkId, found ${results.size} results")
-        return DatasetSearchResult(linkId, results)
+        Log.d(TAG, "searchInDataset complete for $linkId, found ${results.size} results, isPTM=$datasetIsPTM")
+        return DatasetSearchResult(linkId, results, isPTM = datasetIsPTM)
     }
 
     private suspend fun findRegexGeneMatches(
@@ -455,6 +509,20 @@ class CrossDatasetSearchService @Inject constructor(
         datasetResults: List<DatasetSearchResult>,
         totalDatasets: Int,
         significantOnly: Boolean,
+        advancedFiltering: CrossDatasetAdvancedFilterParams? = null,
+        isPTM: Boolean = false
+    ): List<ProteinSearchSummary> {
+        if (isPTM) {
+            return aggregatePTMResults(datasetResults, totalDatasets, significantOnly, advancedFiltering)
+        }
+        return aggregateTPResults(searchTerms, datasetResults, totalDatasets, significantOnly, advancedFiltering)
+    }
+
+    private fun aggregateTPResults(
+        searchTerms: List<String>,
+        datasetResults: List<DatasetSearchResult>,
+        totalDatasets: Int,
+        significantOnly: Boolean,
         advancedFiltering: CrossDatasetAdvancedFilterParams? = null
     ): List<ProteinSearchSummary> {
         val summaries = mutableListOf<ProteinSearchSummary>()
@@ -486,30 +554,7 @@ class CrossDatasetSearchService @Inject constructor(
             if (datasetsFoundIn > 0) {
                 val avgFC = if (allFoldChanges.isNotEmpty()) allFoldChanges.average() else null
 
-                val passesAdvancedFilter = advancedFiltering?.let { params ->
-                    if (avgFC == null) return@let true
-
-                    val passesLeftFilter = if (params.searchLeft && avgFC < 0) {
-                        val absFC = abs(avgFC)
-                        absFC >= params.minFCLeft && absFC <= params.maxFCLeft
-                    } else !params.searchLeft || avgFC >= 0
-
-                    val passesRightFilter = if (params.searchRight && avgFC > 0) {
-                        avgFC >= params.minFCRight && avgFC <= params.maxFCRight
-                    } else !params.searchRight || avgFC <= 0
-
-                    if (params.searchLeft && params.searchRight) {
-                        passesLeftFilter || passesRightFilter
-                    } else if (params.searchLeft) {
-                        passesLeftFilter
-                    } else if (params.searchRight) {
-                        passesRightFilter
-                    } else {
-                        true
-                    }
-                } ?: true
-
-                if ((!significantOnly || hasSignificant) && passesAdvancedFilter) {
+                if (passesFilters(avgFC, hasSignificant, significantOnly, advancedFiltering)) {
                     summaries.add(
                         ProteinSearchSummary(
                             searchTerm = searchTerm,
@@ -526,6 +571,107 @@ class CrossDatasetSearchService @Inject constructor(
         }
 
         return summaries.sortedByDescending { it.datasetsFoundIn }
+    }
+
+    private fun aggregatePTMResults(
+        datasetResults: List<DatasetSearchResult>,
+        totalDatasets: Int,
+        significantOnly: Boolean,
+        advancedFiltering: CrossDatasetAdvancedFilterParams? = null
+    ): List<ProteinSearchSummary> {
+        val summaries = mutableListOf<ProteinSearchSummary>()
+        val allKeys = datasetResults.flatMap { it.results.keys }.distinct()
+
+        allKeys.forEach { key ->
+            var resolvedPrimaryId: String? = null
+            val accumulatedGeneNames = mutableSetOf<String>()
+            var datasetsFoundIn = 0
+            var hasSignificant = false
+            val allFoldChanges = mutableListOf<Double>()
+            var accession: String? = null
+            var position: String? = null
+            var peptideSequence: String? = null
+            var score: Double? = null
+            var originalSearchTerm: String? = null
+
+            datasetResults.forEach { datasetResult ->
+                val result = datasetResult.results[key]
+                if (result != null && result.found) {
+                    datasetsFoundIn++
+                    if (resolvedPrimaryId == null) resolvedPrimaryId = result.primaryId
+                    result.geneName?.split(";")?.map { it.trim() }?.filter { it.isNotEmpty() }?.forEach {
+                        accumulatedGeneNames.add(it)
+                    }
+                    if (result.hasSignificant) hasSignificant = true
+                    result.averageFoldChange?.let { allFoldChanges.add(it) }
+                    if (accession == null) accession = result.accession
+                    if (position == null) position = result.position
+                    if (peptideSequence == null) peptideSequence = result.peptideSequence
+                    if (score == null) score = result.score
+                    if (originalSearchTerm == null) originalSearchTerm = result.originalSearchTerm
+                }
+            }
+
+            val resolvedGeneName = if (accumulatedGeneNames.isNotEmpty()) {
+                accumulatedGeneNames.sorted().joinToString(";")
+            } else null
+
+            if (datasetsFoundIn > 0) {
+                val avgFC = if (allFoldChanges.isNotEmpty()) allFoldChanges.average() else null
+
+                if (passesFilters(avgFC, hasSignificant, significantOnly, advancedFiltering)) {
+                    summaries.add(
+                        ProteinSearchSummary(
+                            searchTerm = originalSearchTerm ?: key,
+                            primaryId = resolvedPrimaryId,
+                            geneName = resolvedGeneName,
+                            datasetsFoundIn = datasetsFoundIn,
+                            totalDatasetsSearched = totalDatasets,
+                            averageFoldChange = avgFC,
+                            hasSignificantResult = hasSignificant,
+                            accession = accession,
+                            position = position,
+                            peptideSequence = peptideSequence,
+                            score = score
+                        )
+                    )
+                }
+            }
+        }
+
+        return summaries.sortedByDescending { it.datasetsFoundIn }
+    }
+
+    private fun passesFilters(
+        avgFC: Double?,
+        hasSignificant: Boolean,
+        significantOnly: Boolean,
+        advancedFiltering: CrossDatasetAdvancedFilterParams?
+    ): Boolean {
+        val passesAdvancedFilter = advancedFiltering?.let { params ->
+            if (avgFC == null) return@let true
+
+            val passesLeftFilter = if (params.searchLeft && avgFC < 0) {
+                val absFC = abs(avgFC)
+                absFC >= params.minFCLeft && absFC <= params.maxFCLeft
+            } else !params.searchLeft || avgFC >= 0
+
+            val passesRightFilter = if (params.searchRight && avgFC > 0) {
+                avgFC >= params.minFCRight && avgFC <= params.maxFCRight
+            } else !params.searchRight || avgFC <= 0
+
+            if (params.searchLeft && params.searchRight) {
+                passesLeftFilter || passesRightFilter
+            } else if (params.searchLeft) {
+                passesLeftFilter
+            } else if (params.searchRight) {
+                passesRightFilter
+            } else {
+                true
+            }
+        } ?: true
+
+        return (!significantOnly || hasSignificant) && passesAdvancedFilter
     }
 
     private fun parseSearchInput(terms: List<String>): List<String> {
@@ -568,17 +714,37 @@ class CrossDatasetSearchService @Inject constructor(
     }
 
     fun exportAllResults(result: CrossDatasetSearchResult): String {
-        val header = "Search Term,Primary ID,Gene Name,Datasets Found,Total Datasets,Average FC,Has Significant"
+        val hasPTMData = result.proteinSummaries.any { it.position != null }
+
+        val header = if (hasPTMData) {
+            "Search Term,Primary ID,Gene Name,Accession,Position,Peptide Sequence,Score,Datasets Found,Total Datasets,Average FC,Has Significant"
+        } else {
+            "Search Term,Primary ID,Gene Name,Datasets Found,Total Datasets,Average FC,Has Significant"
+        }
+
         val rows = result.proteinSummaries.map { summary ->
-            listOf(
+            val baseFields = listOf(
                 summary.searchTerm,
                 summary.primaryId ?: "",
-                summary.geneName ?: "",
+                summary.geneName ?: ""
+            )
+            val ptmFields = if (hasPTMData) {
+                listOf(
+                    summary.accession ?: "",
+                    summary.position ?: "",
+                    summary.peptideSequence ?: "",
+                    summary.score?.let { String.format("%.4f", it) } ?: ""
+                )
+            } else {
+                emptyList()
+            }
+            val trailingFields = listOf(
                 summary.datasetsFoundIn.toString(),
                 summary.totalDatasetsSearched.toString(),
                 summary.averageFoldChange?.let { String.format("%.4f", it) } ?: "",
                 if (summary.hasSignificantResult) "Yes" else "No"
-            ).joinToString(",") { escapeCSV(it) }
+            )
+            (baseFields + ptmFields + trailingFields).joinToString(",") { escapeCSV(it) }
         }
 
         return (listOf(header) + rows).joinToString("\n")
@@ -594,7 +760,8 @@ class CrossDatasetSearchService @Inject constructor(
 
     private data class DatasetSearchResult(
         val linkId: String,
-        val results: Map<String, ProteinDatasetResult>
+        val results: Map<String, ProteinDatasetResult>,
+        val isPTM: Boolean = false
     )
 
     private data class ProteinDatasetResult(
@@ -602,19 +769,20 @@ class CrossDatasetSearchService @Inject constructor(
         val geneName: String?,
         val found: Boolean,
         val hasSignificant: Boolean,
-        val averageFoldChange: Double?
+        val averageFoldChange: Double?,
+        val accession: String? = null,
+        val position: String? = null,
+        val peptideSequence: String? = null,
+        val score: Double? = null,
+        val originalSearchTerm: String? = null
     )
 
-    private fun getUniprotFromPrimary(id: String, curtainData: info.proteo.curtain.domain.model.CurtainData): Map<String, Any>? {
-        val uniprotDB = curtainData.extraData?.uniprot?.db as? Map<String, Any>
+    private suspend fun getUniprotFromPrimary(id: String, linkId: String, curtainData: info.proteo.curtain.domain.model.CurtainData): Map<String, Any>? {
+        val uniprotData = proteomicsDataService.getUniProtData(linkId, id)
+        if (uniprotData != null) return uniprotData
+
         val dataMap = curtainData.extraData?.uniprot?.dataMap as? Map<String, Any>
         val accMap = curtainData.extraData?.uniprot?.accMap as? Map<String, Any>
-
-        if (uniprotDB == null) return null
-
-        if (uniprotDB.containsKey(id)) {
-            return uniprotDB[id] as? Map<String, Any>
-        }
 
         if (accMap != null && accMap.containsKey(id)) {
             val alternatives = accMap[id] as? List<*>
@@ -622,8 +790,9 @@ class CrossDatasetSearchService @Inject constructor(
                 for (alt in alternatives) {
                     if (dataMap != null && dataMap.containsKey(alt)) {
                         val canonicalEntry = dataMap[alt] as? String
-                        if (canonicalEntry != null && uniprotDB.containsKey(canonicalEntry)) {
-                            return uniprotDB[canonicalEntry] as? Map<String, Any>
+                        if (canonicalEntry != null) {
+                            val altData = proteomicsDataService.getUniProtData(linkId, canonicalEntry)
+                            if (altData != null) return altData
                         }
                     }
                 }
@@ -633,8 +802,8 @@ class CrossDatasetSearchService @Inject constructor(
         return null
     }
 
-    private fun getGeneNameFromUniProt(id: String, curtainData: info.proteo.curtain.domain.model.CurtainData): String? {
-        val uniprotRecord = getUniprotFromPrimary(id, curtainData)
+    private suspend fun getGeneNameFromUniProt(id: String, linkId: String, curtainData: info.proteo.curtain.domain.model.CurtainData): String? {
+        val uniprotRecord = getUniprotFromPrimary(id, linkId, curtainData)
         if (uniprotRecord != null) {
             val geneNames = uniprotRecord["Gene Names"] as? String
             if (!geneNames.isNullOrEmpty()) {
@@ -658,7 +827,7 @@ class CrossDatasetSearchService @Inject constructor(
         var geneName: String? = null
 
         if (curtainData.fetchUniprot) {
-            geneName = getGeneNameFromUniProt(proteinId, curtainData)
+            geneName = getGeneNameFromUniProt(proteinId, linkId, curtainData)
         }
 
         if (geneName.isNullOrEmpty()) {

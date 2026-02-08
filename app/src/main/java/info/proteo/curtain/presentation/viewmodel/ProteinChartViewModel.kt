@@ -47,6 +47,18 @@ class ProteinChartViewModel @Inject constructor(
     private val _pValue = MutableStateFlow<Double?>(null)
     val pValue: StateFlow<Double?> = _pValue.asStateFlow()
 
+    private val _accession = MutableStateFlow<String?>(null)
+    val accession: StateFlow<String?> = _accession.asStateFlow()
+
+    private val _position = MutableStateFlow<String?>(null)
+    val position: StateFlow<String?> = _position.asStateFlow()
+
+    private val _peptideSequence = MutableStateFlow<String?>(null)
+    val peptideSequence: StateFlow<String?> = _peptideSequence.asStateFlow()
+
+    private val _score = MutableStateFlow<Double?>(null)
+    val score: StateFlow<Double?> = _score.asStateFlow()
+
     fun loadProteinChart(
         curtainData: CurtainData,
         proteinId: String,
@@ -71,9 +83,17 @@ class ProteinChartViewModel @Inject constructor(
                     val processedData = processedDataList.first()
                     _foldChange.value = processedData.foldChange
                     _pValue.value = processedData.significant
+                    _accession.value = processedData.accession
+                    _position.value = processedData.position
+                    _peptideSequence.value = processedData.peptideSequence
+                    _score.value = processedData.score
                 } else {
                     _foldChange.value = null
                     _pValue.value = null
+                    _accession.value = null
+                    _position.value = null
+                    _peptideSequence.value = null
+                    _score.value = null
                 }
 
                 val individualLimits = curtainData.settings.individualYAxisLimits[proteinId] as? Map<*, *>
@@ -139,7 +159,4 @@ class ProteinChartViewModel @Inject constructor(
         }
     }
 
-    fun exportChart() {
-        // TODO: Implement chart export
-    }
 }

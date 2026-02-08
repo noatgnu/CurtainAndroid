@@ -11,6 +11,7 @@ import info.proteo.curtain.data.local.entity.PrimaryIdsMapEntity
 import info.proteo.curtain.data.local.entity.ProcessedProteomicsDataEntity
 import info.proteo.curtain.data.local.entity.ProteomicsDataMetadataEntity
 import info.proteo.curtain.data.local.entity.RawProteomicsDataEntity
+import info.proteo.curtain.data.local.entity.UniProtEntryEntity
 
 @Database(
     entities = [
@@ -21,9 +22,10 @@ import info.proteo.curtain.data.local.entity.RawProteomicsDataEntity
         PrimaryIdsMapEntity::class,
         GeneNameToAccEntity::class,
         AllGenesEntity::class,
-        CurtainMetadataEntity::class
+        CurtainMetadataEntity::class,
+        UniProtEntryEntity::class
     ],
-    version = 5,
+    version = 8,
     exportSchema = false
 )
 abstract class ProteomicsDataDatabase : RoomDatabase() {

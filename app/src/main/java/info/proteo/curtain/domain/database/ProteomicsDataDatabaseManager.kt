@@ -17,7 +17,7 @@ class ProteomicsDataDatabaseManager @Inject constructor(
 
     companion object {
         const val SCHEMA_VERSION_KEY = "schema_version"
-        const val CURRENT_SCHEMA_VERSION = 5
+        const val CURRENT_SCHEMA_VERSION = 10
     }
 
     suspend fun getDatabaseForLinkId(linkId: String): ProteomicsDataDatabase {
@@ -67,6 +67,7 @@ class ProteomicsDataDatabaseManager @Inject constructor(
         db.proteomicsDataDao().deleteAllGeneNameToAcc()
         db.proteomicsDataDao().deleteAllGenes()
         db.proteomicsDataDao().deleteCurtainMetadata()
+        db.proteomicsDataDao().deleteAllUniProtEntries()
     }
 
     suspend fun storeSchemaVersion(linkId: String) {

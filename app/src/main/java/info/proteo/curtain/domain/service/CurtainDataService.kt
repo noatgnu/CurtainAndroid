@@ -168,7 +168,13 @@ class CurtainDataService @Inject constructor(
             transformSignificant = diffFormJson.get("_transformSignificant")?.asBoolean ?: false,
             comparison = diffFormJson.get("_comparison")?.asString ?: "",
             comparisonSelect = parseStringList(diffFormJson.get("_comparisonSelect")),
-            reverseFoldChange = diffFormJson.get("_reverseFoldChange")?.asBoolean ?: false
+            reverseFoldChange = diffFormJson.get("_reverseFoldChange")?.asBoolean ?: false,
+            accession = diffFormJson.get("_accession")?.asString ?: "",
+            position = diffFormJson.get("_position")?.asString ?: "",
+            positionPeptide = diffFormJson.get("_positionPeptide")?.asString ?: "",
+            peptideSequence = diffFormJson.get("_peptideSequence")?.asString ?: "",
+            score = diffFormJson.get("_score")?.asString ?: "",
+            sequence = diffFormJson.get("_sequence")?.asString ?: ""
         )
     }
 
@@ -200,7 +206,9 @@ class CurtainDataService @Inject constructor(
         val dataMap = unwrapMapData(dataMapRaw)
         val accMap = unwrapMapData(accMapRaw)
 
-        val geneNameToAccRaw = parseAnyValueLimited(uniprotJson.get("geneNameToAcc"))
+        val geneNameToAccRaw = parseAnyValueLimited(
+            uniprotJson.get("geneNameToAcc") ?: uniprotJson.get("geneNameToPrimary")
+        )
         val geneNameToAcc = unwrapMapData(geneNameToAccRaw)
 
         return UniprotExtraData(
@@ -406,7 +414,7 @@ class CurtainDataService @Inject constructor(
     private fun parseMap(element: com.google.gson.JsonElement?, depth: Int = 0): Map<String, Any> {
         element ?: return emptyMap()
         if (!element.isJsonObject) return emptyMap()
-        if (depth > 3) return emptyMap()
+        if (depth > 10) return emptyMap()
         return element.asJsonObject.entrySet().associate { it.key to parseAnyValue(it.value, depth + 1) }
     }
 
@@ -439,13 +447,13 @@ class CurtainDataService @Inject constructor(
     private fun parseAnyList(element: com.google.gson.JsonElement?, depth: Int = 0): List<Any> {
         element ?: return emptyList()
         if (!element.isJsonArray) return emptyList()
-        if (depth > 3) return emptyList()
+        if (depth > 10) return emptyList()
         return element.asJsonArray.map { parseAnyValue(it, depth + 1) }
     }
 
     private fun parseAnyValue(element: com.google.gson.JsonElement?, depth: Int = 0): Any {
         element ?: return ""
-        if (depth > 3) return ""
+        if (depth > 10) return ""
         return when {
             element.isJsonPrimitive -> {
                 when {

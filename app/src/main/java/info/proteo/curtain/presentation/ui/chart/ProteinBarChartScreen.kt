@@ -9,11 +9,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import info.proteo.curtain.presentation.ui.dialogs.ExportFormat
+import info.proteo.curtain.presentation.ui.dialogs.ExportPlotDialog
+import info.proteo.curtain.presentation.utils.FileExportUtils
 import info.proteo.curtain.presentation.viewmodel.ProteinChartViewModel
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,6 +36,12 @@ fun ProteinBarChartScreen(
     val error by viewModel.error.collectAsState()
     val currentProteinId by viewModel.proteinId.collectAsState()
 
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var currentWebView by remember { mutableStateOf<WebView?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     LaunchedEffect(linkId, proteinId, curtainData) {
         if (curtainData != null) {
             viewModel.loadProteinChart(curtainData!!, proteinId)
@@ -39,15 +51,18 @@ fun ProteinBarChartScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Protein Bar Chart") },
+                title = {
+                    val isPTM = curtainData?.differentialForm?.isPTM == true
+                    Text(if (isPTM) "Site Bar Chart" else "Protein Bar Chart")
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.exportChart() }) {
-                        Icon(Icons.Default.Share, contentDescription = "Export")
+                    IconButton(onClick = { showExportDialog = true }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export")
                     }
                     IconButton(onClick = {  }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
@@ -77,15 +92,62 @@ fun ProteinBarChartScreen(
                     )
                 }
                 barChartHtml != null -> {
-                    BarChartView(htmlContent = barChartHtml!!)
+                    BarChartView(
+                        htmlContent = barChartHtml!!,
+                        onWebViewCreated = { currentWebView = it },
+                        onImageExported = { json ->
+                            scope.launch {
+                                try {
+                                    val jsonObj = JSONObject(json)
+                                    val format = jsonObj.getString("format")
+                                    val filename = jsonObj.getString("filename")
+                                    val dataUrl = jsonObj.getString("dataUrl")
+                                    val result = FileExportUtils.exportFromDataUrl(context, filename, dataUrl, format)
+                                    exportMessage = result.getOrNull() ?: result.exceptionOrNull()?.message
+                                } catch (e: Exception) {
+                                    exportMessage = "Export failed: ${e.message}"
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
     }
+
+    if (showExportDialog) {
+        ExportPlotDialog(
+            defaultFileName = "bar_chart_${proteinId}",
+            onDismiss = { showExportDialog = false },
+            onExport = { fileName, format ->
+                val formatStr = when (format) {
+                    ExportFormat.SVG -> "svg"
+                    ExportFormat.PNG -> "png"
+                }
+                currentWebView?.evaluateJavascript(
+                    "window.BarChart.exportPlot('$formatStr', '$fileName')",
+                    null
+                ) ?: run { exportMessage = "Chart not ready for export" }
+                showExportDialog = false
+            }
+        )
+    }
+
+    exportMessage?.let { message ->
+        LaunchedEffect(message) {
+            kotlinx.coroutines.delay(3000)
+            exportMessage = null
+        }
+        Snackbar(modifier = Modifier.padding(16.dp)) { Text(message) }
+    }
 }
 
 @Composable
-private fun BarChartView(htmlContent: String) {
+private fun BarChartView(
+    htmlContent: String,
+    onWebViewCreated: (WebView) -> Unit = {},
+    onImageExported: (String) -> Unit = {}
+) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     AndroidView(
@@ -114,10 +176,12 @@ private fun BarChartView(htmlContent: String) {
                     onBarClicked = { data ->
                     },
                     onBarHover = { data ->
-                    }
+                    },
+                    onImageExported = { json -> onImageExported(json) }
                 )
 
                 addJavascriptInterface(bridge, "AndroidBridge")
+                onWebViewCreated(this)
             }
         },
         update = { webView ->

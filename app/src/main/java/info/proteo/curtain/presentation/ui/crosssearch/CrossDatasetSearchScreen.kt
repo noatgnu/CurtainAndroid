@@ -167,6 +167,8 @@ private fun TabletCrossDatasetSearchScreen(
     val expandedCollectionIds by viewModel.expandedCollectionIds.collectAsState()
     val collectionSessions by viewModel.collectionSessions.collectAsState()
     val datasetStatuses by viewModel.datasetStatuses.collectAsState()
+    val selectedDatasetType by viewModel.selectedDatasetType.collectAsState()
+    val curtainTypeFilter by viewModel.curtainTypeFilter.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -226,6 +228,8 @@ private fun TabletCrossDatasetSearchScreen(
                 )
 
                 CurtainListPanel(
+                    curtainTypeFilter = curtainTypeFilter,
+                    onCurtainTypeFilterChange = { viewModel.setCurtainTypeFilter(it) },
                     mode = CurtainListMode.SELECTION,
                     datasets = availableDatasets,
                     collections = collections,
@@ -319,7 +323,8 @@ private fun TabletCrossDatasetSearchScreen(
                     onAdvancedFilteringChange = { viewModel.setAdvancedFiltering(it) },
                     selectedDatasetCount = selectedDatasetIds.size,
                     onSearch = { viewModel.performSearch() },
-                    isSearching = isSearching
+                    isSearching = isSearching,
+                    selectedDatasetType = selectedDatasetType
                 )
 
                 AnimatedVisibility(
@@ -371,6 +376,8 @@ private fun PhoneCrossDatasetSearchScreen(
     val expandedCollectionIds by viewModel.expandedCollectionIds.collectAsState()
     val collectionSessions by viewModel.collectionSessions.collectAsState()
     val datasetStatuses by viewModel.datasetStatuses.collectAsState()
+    val selectedDatasetType by viewModel.selectedDatasetType.collectAsState()
+    val curtainTypeFilter by viewModel.curtainTypeFilter.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var currentStep by rememberSaveable { mutableIntStateOf(0) }
@@ -484,6 +491,8 @@ private fun PhoneCrossDatasetSearchScreen(
                     onDeselectAllInCollection = { viewModel.deselectAllSessionsInCollection(it) },
                     onToggleSession = { viewModel.toggleSessionSelection(it) },
                     onNext = { currentStep = 1 },
+                    curtainTypeFilter = curtainTypeFilter,
+                    onCurtainTypeFilterChange = { viewModel.setCurtainTypeFilter(it) },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -554,7 +563,8 @@ private fun PhoneCrossDatasetSearchScreen(
                         onAdvancedFilteringChange = { viewModel.setAdvancedFiltering(it) },
                         selectedDatasetCount = selectedDatasetIds.size,
                         onSearch = { viewModel.performSearch() },
-                        isSearching = isSearching
+                        isSearching = isSearching,
+                        selectedDatasetType = selectedDatasetType
                     )
 
                     AnimatedVisibility(
@@ -596,6 +606,8 @@ private fun PhoneDatasetSelectionStep(
     onDeselectAllInCollection: (Long) -> Unit,
     onToggleSession: (String) -> Unit,
     onNext: () -> Unit,
+    curtainTypeFilter: String = "all",
+    onCurtainTypeFilterChange: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -613,6 +625,8 @@ private fun PhoneDatasetSelectionStep(
             onSelectAllInCollection = onSelectAllInCollection,
             onDeselectAllInCollection = onDeselectAllInCollection,
             onToggleSessionSelection = onToggleSession,
+            curtainTypeFilter = curtainTypeFilter,
+            onCurtainTypeFilterChange = onCurtainTypeFilterChange,
             modifier = Modifier.weight(1f)
         )
 
@@ -647,7 +661,8 @@ private fun SearchInputSection(
     selectedDatasetCount: Int,
     onSearch: () -> Unit,
     isSearching: Boolean,
-    onDatasetSelectorClick: (() -> Unit)? = null
+    onDatasetSelectorClick: (() -> Unit)? = null,
+    selectedDatasetType: String? = null
 ) {
     var expandedOptions by remember { mutableStateOf(false) }
 
@@ -691,6 +706,16 @@ private fun SearchInputSection(
                     { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
                 } else null
             )
+            if (selectedDatasetType == "PTM") {
+                FilterChip(
+                    selected = searchType == SearchType.ACCESSION,
+                    onClick = { onSearchTypeChange(SearchType.ACCESSION) },
+                    label = { Text("Accession", style = MaterialTheme.typography.labelSmall) },
+                    leadingIcon = if (searchType == SearchType.ACCESSION) {
+                        { Icon(Icons.Default.Check, null, Modifier.size(16.dp)) }
+                    } else null
+                )
+            }
 
             Spacer(modifier = Modifier.weight(1f))
 

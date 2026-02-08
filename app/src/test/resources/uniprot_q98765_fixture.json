@@ -1,0 +1,19 @@
+{
+  "Entry": "Q98765",
+  "Gene Names": "MAPK1; ERK2",
+  "Protein names": "Mitogen-activated protein kinase 1 (MAP kinase 1) (MAPK 1) (EC 2.7.11.24)",
+  "Organism": "Mus musculus (Mouse)",
+  "Sequence": "MAAAAAAGAGPEMVRGQVFDVGPRYTNLSYIGEGAYGMVCSAYDNVNKVRVAIKKISPFEHQTYCQRTLREIKILLRFRHENIIGINDIIRAPTIEQMKDVYIVQDLMETDLYKLLKTQHLSNDHICYFLYQILRGLKYIHSANVLHRDLKPSNLLLNTTCDLKICDFGLARVADPDHDHTGFLTEYVATRWYRAPEIMLNSKGYTKSIDIWSVGCILAEMLSNRPIFPGKHYLDQLNHILGILGSPSQEDLNCIINLKARNYLLSLPHKNKVPWNRLFPNADSKALDLLDKMLTFNPHKRIEVEQALAHPYLEQYYDPSDEPIAEAPFKFDMELDDLPKEKLKELIFEETARFQPGYRS",
+  "Length": "360",
+  "Domain [FT]": "DOMAIN 25..313; /note=\"Protein kinase\"; DOMAIN 180..220; /note=\"Activation loop\"",
+  "Modified residue": [
+    {"position": 183, "residue": "T", "modType": "Phosphothreonine"},
+    {"position": 185, "residue": "Y", "modType": "Phosphotyrosine"},
+    {"position": 203, "residue": "S", "modType": "Phosphoserine"},
+    {"position": 248, "residue": "T", "modType": "Phosphothreonine"},
+    {"position": 292, "residue": "S", "modType": "Phosphoserine"}
+  ],
+  "Active site": "ACT_SITE 147; /note=\"Proton acceptor\"",
+  "Binding site": "BINDING 31..39; /note=\"ATP\"; BINDING 52; /note=\"ATP\"",
+  "Alternative products (isoforms)": "Event=Alternative splicing; Named isoforms=2; Name=1; IsoId=Q98765-1; Sequence=Displayed; Name=2; IsoId=Q98765-2; Sequence=VSP_009876"
+}

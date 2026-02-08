@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.room.Room
 import dagger.hilt.android.qualifiers.ApplicationContext
 import info.proteo.curtain.data.local.ProteinMappingDatabase
+import info.proteo.curtain.data.local.entity.AccessionMappingEntity
 import info.proteo.curtain.data.local.entity.GeneNameMappingEntity
 import info.proteo.curtain.data.local.entity.PrimaryIdMappingEntity
 import info.proteo.curtain.data.local.entity.ProteinMappingMetadataEntity
@@ -20,7 +21,7 @@ class ProteinMappingDatabaseManager @Inject constructor(
 
     companion object {
         const val SCHEMA_VERSION_KEY = "schema_version"
-        const val CURRENT_SCHEMA_VERSION = 3
+        const val CURRENT_SCHEMA_VERSION = 5
     }
 
     private fun getDatabaseForLinkId(linkId: String): ProteinMappingDatabase {
@@ -124,6 +125,16 @@ class ProteinMappingDatabaseManager @Inject constructor(
         }
     }
 
+    suspend fun getAllDistinctGeneNames(linkId: String): List<String> {
+        return try {
+            val db = getDatabaseForLinkId(linkId)
+            db.proteinMappingDao().getAllDistinctGeneNames()
+        } catch (e: Exception) {
+            Log.e("ProteinMappingDB", "Error querying all gene names for $linkId", e)
+            emptyList()
+        }
+    }
+
     suspend fun getGeneNameFromPrimaryId(linkId: String, primaryId: String): String? {
         return try {
             val db = getDatabaseForLinkId(linkId)
@@ -134,11 +145,52 @@ class ProteinMappingDatabaseManager @Inject constructor(
         }
     }
 
+    suspend fun insertAccessionMappings(linkId: String, mappings: List<Pair<String, String>>) {
+        try {
+            val db = getDatabaseForLinkId(linkId)
+            val entities = mappings.map { (accession, primaryId) ->
+                AccessionMappingEntity(
+                    accession = accession,
+                    primaryId = primaryId
+                )
+            }
+            Log.d("ProteinMappingDB", "Inserting ${entities.size} accession mappings for linkId '$linkId'")
+            db.proteinMappingDao().insertAccessionMappings(entities)
+            Log.d("ProteinMappingDB", "Successfully inserted accession mappings for linkId '$linkId'")
+        } catch (e: Exception) {
+            Log.e("ProteinMappingDB", "Error inserting accession mappings for $linkId", e)
+            throw e
+        }
+    }
+
+    suspend fun getPrimaryIdsFromAccession(linkId: String, accession: String): List<String> {
+        return try {
+            val db = getDatabaseForLinkId(linkId)
+            val results = db.proteinMappingDao().getPrimaryIdsFromAccession(accession)
+            Log.d("ProteinMappingDB", "Query accession '$accession' for linkId '$linkId': ${results.size} results")
+            results
+        } catch (e: Exception) {
+            Log.e("ProteinMappingDB", "Error querying accession for $linkId", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getAccessionFromPrimaryId(linkId: String, primaryId: String): String? {
+        return try {
+            val db = getDatabaseForLinkId(linkId)
+            db.proteinMappingDao().getAccessionFromPrimaryId(primaryId)
+        } catch (e: Exception) {
+            Log.e("ProteinMappingDB", "Error querying accession for primaryId $primaryId in $linkId", e)
+            null
+        }
+    }
+
     suspend fun clearAllMappings(linkId: String) {
         try {
             val db = getDatabaseForLinkId(linkId)
             db.proteinMappingDao().deletePrimaryIdMappings()
             db.proteinMappingDao().deleteGeneNameMappings()
+            db.proteinMappingDao().deleteAccessionMappings()
             db.proteinMappingDao().deleteMetadata()
             Log.d("ProteinMappingDB", "Cleared all mappings for linkId '$linkId'")
         } catch (e: Exception) {

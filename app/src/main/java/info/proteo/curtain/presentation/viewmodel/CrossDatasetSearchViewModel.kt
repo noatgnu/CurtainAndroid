@@ -31,7 +31,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -147,6 +149,12 @@ class CrossDatasetSearchViewModel @Inject constructor(
     private val _isLoadingMatrix = MutableStateFlow(false)
     val isLoadingMatrix: StateFlow<Boolean> = _isLoadingMatrix.asStateFlow()
 
+    private val _selectedDatasetType = MutableStateFlow<String?>(null)
+    val selectedDatasetType: StateFlow<String?> = _selectedDatasetType.asStateFlow()
+
+    private val _curtainTypeFilter = MutableStateFlow("all")
+    val curtainTypeFilter: StateFlow<String> = _curtainTypeFilter.asStateFlow()
+
     private val _matrixFilterOptions = MutableStateFlow(MatrixFilterOptions())
     val matrixFilterOptions: StateFlow<MatrixFilterOptions> = _matrixFilterOptions.asStateFlow()
 
@@ -156,6 +164,17 @@ class CrossDatasetSearchViewModel @Inject constructor(
     init {
         loadAvailableDatasets()
         observeProcessingStatus()
+        observeSelectedDatasetType()
+    }
+
+    private fun observeSelectedDatasetType() {
+        viewModelScope.launch {
+            _selectedDatasetIds.collect { ids ->
+                val datasets = _availableDatasets.value
+                val types = ids.mapNotNull { id -> datasets.find { it.linkId == id }?.curtainType }.distinct()
+                _selectedDatasetType.value = if (types.size == 1) types.first() else null
+            }
+        }
     }
 
     private fun observeProcessingStatus() {
@@ -245,11 +264,22 @@ class CrossDatasetSearchViewModel @Inject constructor(
     }
 
     fun selectAllDatasets() {
-        _selectedDatasetIds.value = _availableDatasets.value.map { it.linkId }.toSet()
+        val filter = _curtainTypeFilter.value
+        _selectedDatasetIds.value = _availableDatasets.value
+            .filter { filter == "all" || it.curtainType == filter }
+            .map { it.linkId }
+            .toSet()
     }
 
     fun deselectAllDatasets() {
         _selectedDatasetIds.value = emptySet()
+    }
+
+    fun setCurtainTypeFilter(filter: String) {
+        if (_curtainTypeFilter.value != filter) {
+            _curtainTypeFilter.value = filter
+            _selectedDatasetIds.value = emptySet()
+        }
     }
 
     fun selectCollection(collectionId: Long) {
@@ -340,6 +370,13 @@ class CrossDatasetSearchViewModel @Inject constructor(
             return
         }
 
+        val datasets = _availableDatasets.value
+        val types = datasetIds.mapNotNull { id -> datasets.find { it.linkId == id }?.curtainType }.distinct()
+        if (types.size > 1) {
+            _error.value = "Cannot mix dataset types (${types.joinToString(", ")}). Select only TP or only PTM datasets."
+            return
+        }
+
         viewModelScope.launch {
             _isSearching.value = true
             _error.value = null
@@ -357,7 +394,9 @@ class CrossDatasetSearchViewModel @Inject constructor(
                     advancedFiltering = _advancedFiltering.value
                 )
 
-                val result = crossDatasetSearchService.searchAcrossDatasets(config)
+                val result = withContext(Dispatchers.IO) {
+                    crossDatasetSearchService.searchAcrossDatasets(config)
+                }
                 _searchResults.value = result.copy(
                     proteinSummaries = sortProteinSummaries(result.proteinSummaries)
                 )
@@ -378,12 +417,14 @@ class CrossDatasetSearchViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoadingReport.value = true
             try {
-                val report = crossDatasetSearchService.getProteinDetailedReport(
-                    searchTerm = protein.searchTerm,
-                    primaryId = protein.primaryId,
-                    datasetLinkIds = _selectedDatasetIds.value.toList(),
-                    searchType = _searchType.value
-                )
+                val report = withContext(Dispatchers.IO) {
+                    crossDatasetSearchService.getProteinDetailedReport(
+                        searchTerm = protein.searchTerm,
+                        primaryId = protein.primaryId,
+                        datasetLinkIds = _selectedDatasetIds.value.toList(),
+                        searchType = _searchType.value
+                    )
+                }
                 _proteinReport.value = report
             } catch (e: Exception) {
                 _error.value = "Failed to load protein details: ${e.message}"
@@ -437,10 +478,12 @@ class CrossDatasetSearchViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoadingMatrix.value = true
             try {
-                val matrix = crossDatasetSearchService.buildCrossDatasetMatrix(
-                    searchResult = result,
-                    filterOptions = _matrixFilterOptions.value
-                )
+                val matrix = withContext(Dispatchers.IO) {
+                    crossDatasetSearchService.buildCrossDatasetMatrix(
+                        searchResult = result,
+                        filterOptions = _matrixFilterOptions.value
+                    )
+                }
                 _matrixData.value = matrix
             } catch (e: Exception) {
                 _error.value = "Failed to build matrix: ${e.message}"

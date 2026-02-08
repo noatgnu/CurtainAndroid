@@ -18,6 +18,7 @@ import info.proteo.curtain.data.local.dao.SavedCrossDatasetSearchDao
 import info.proteo.curtain.data.local.dao.SelectionGroupDao
 import info.proteo.curtain.data.local.dao.SettingsVariantDao
 import info.proteo.curtain.data.local.dao.SiteSettingsDao
+import info.proteo.curtain.domain.preferences.ThemePreference
 import javax.inject.Singleton
 
 /**
@@ -212,5 +213,13 @@ object DatabaseModule {
     @Singleton
     fun provideSavedCrossDatasetSearchDao(database: CurtainDatabase): SavedCrossDatasetSearchDao {
         return database.savedCrossDatasetSearchDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideThemePreference(
+        @ApplicationContext context: Context
+    ): ThemePreference {
+        return ThemePreference(context)
     }
 }

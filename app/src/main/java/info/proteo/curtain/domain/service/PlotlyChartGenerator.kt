@@ -112,7 +112,7 @@ class PlotlyChartGenerator @Inject constructor(
                 selectionName != "Other" &&
                 !selectionName.contains("P-value") &&
                 !selectionName.contains("FC")
-            }.sorted()
+            }
         }
 
         for (selectionName in userSelectionNames) {
@@ -132,7 +132,7 @@ class PlotlyChartGenerator @Inject constructor(
             selectionName == "Other" ||
             selectionName.contains("P-value") ||
             selectionName.contains("FC")
-        }.sorted()
+        }
 
         for (selectionName in backgroundAndSignificanceNames) {
             val groupData = selectionGroups[selectionName] ?: continue
@@ -189,7 +189,12 @@ class PlotlyChartGenerator @Inject constructor(
             }
             val geneName = (point["gene"] as? String)?.trim() ?: ""
             val primaryId = (point["id"] as? String)?.trim() ?: ""
-            if (geneName.isNotEmpty() && geneName != primaryId) {
+            val accession = (point["accession"] as? String)?.trim() ?: ""
+            val position = (point["position"] as? String)?.trim() ?: ""
+            if (accession.isNotEmpty() && position.isNotEmpty()) {
+                val label = if (geneName.isNotEmpty()) geneName else accession
+                "$label $position"
+            } else if (geneName.isNotEmpty() && geneName != primaryId) {
                 "$geneName($primaryId)"
             } else {
                 primaryId

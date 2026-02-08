@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -110,10 +111,26 @@ fun CurtainListPanel(
     onDeselectAllDatasets: () -> Unit = {},
     onToggleSessionSelection: (String) -> Unit = {},
     onLoadExample: () -> Unit = {},
+    onLoadPTMExample: () -> Unit = {},
+    onLoadBothExamples: () -> Unit = {},
     onLoadExampleCollection: () -> Unit = {},
+    curtainTypeFilter: String = "all",
+    onCurtainTypeFilterChange: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var selectionSearchQuery by rememberSaveable { mutableStateOf("") }
+
+    val filteredDatasets = remember(datasets, curtainTypeFilter, searchQuery, selectionSearchQuery, mode) {
+        val query = if (mode == CurtainListMode.SELECTION) selectionSearchQuery else searchQuery
+        datasets.filter { dataset ->
+            val matchesType = curtainTypeFilter == "all" || dataset.curtainType == curtainTypeFilter
+            val matchesSearch = query.isBlank() ||
+                dataset.dataDescription.contains(query, ignoreCase = true) ||
+                dataset.linkId.contains(query, ignoreCase = true)
+            matchesType && matchesSearch
+        }
+    }
 
     Column(modifier = modifier) {
         if (mode == CurtainListMode.MANAGEMENT) {
@@ -127,13 +144,55 @@ fun CurtainListPanel(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 singleLine = true
             )
-        }
 
-        if (mode == CurtainListMode.SELECTION) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("all" to "All", "TP" to "TP", "PTM" to "PTM").forEach { (value, label) ->
+                    FilterChip(
+                        selected = curtainTypeFilter == value,
+                        onClick = { onCurtainTypeFilterChange(value) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
+            }
+        }
+
+        if (mode == CurtainListMode.SELECTION) {
+            TextField(
+                value = selectionSearchQuery,
+                onValueChange = { selectionSearchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
+                placeholder = { Text("Search datasets...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                singleLine = true
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("all" to "All", "TP" to "TP", "PTM" to "PTM").forEach { (value, label) ->
+                    FilterChip(
+                        selected = curtainTypeFilter == value,
+                        onClick = { onCurtainTypeFilterChange(value) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -183,6 +242,8 @@ fun CurtainListPanel(
                         DatasetEmptyState(
                             mode = mode,
                             onLoadExample = onLoadExample,
+                            onLoadPTMExample = onLoadPTMExample,
+                            onLoadBothExamples = onLoadBothExamples,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -192,7 +253,7 @@ fun CurtainListPanel(
                                 .weight(1f)
                                 .fillMaxWidth()
                         ) {
-                            items(datasets, key = { it.linkId }) { dataset ->
+                            items(filteredDatasets, key = { it.linkId }) { dataset ->
                                 CurtainListItem(
                                     mode = mode,
                                     dataset = dataset,
@@ -336,12 +397,25 @@ private fun CurtainListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = displayName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Text(
+                            text = dataset.curtainType,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (dataset.curtainType == "PTM") MaterialTheme.colorScheme.tertiary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
                     Text(
                         text = "ID: ${dataset.linkId.take(12)}...",
@@ -779,6 +853,8 @@ private fun SessionListItem(
 private fun DatasetEmptyState(
     mode: CurtainListMode,
     onLoadExample: () -> Unit,
+    onLoadPTMExample: () -> Unit = {},
+    onLoadBothExamples: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -812,8 +888,16 @@ private fun DatasetEmptyState(
             )
             if (mode == CurtainListMode.MANAGEMENT) {
                 Spacer(modifier = Modifier.height(16.dp))
-                TextButton(onClick = onLoadExample) {
-                    Text("Load Example Dataset")
+                TextButton(onClick = onLoadBothExamples) {
+                    Text("Load Both Example Datasets")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onLoadExample) {
+                        Text("TP Only")
+                    }
+                    TextButton(onClick = onLoadPTMExample) {
+                        Text("PTM Only")
+                    }
                 }
             }
         }

@@ -3,6 +3,7 @@ package info.proteo.curtain.domain.service
 import android.content.Intent
 import android.net.Uri
 import info.proteo.curtain.domain.repository.CurtainRepository
+import info.proteo.curtain.util.CurtainConstants
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,7 +82,7 @@ class DeepLinkHandler @Inject constructor(
                     if (collectionId != null) {
                         val baseUrl = "${uri.scheme}://${uri.host}"
                         val apiUrl = if (uri.host?.contains("curtain.proteo.info") == true) {
-                            "https://api.curtain.proteo.info"
+                            "${CurtainConstants.PredefinedHosts.CELSUS_BACKEND}/"
                         } else {
                             "$baseUrl/api"
                         }
@@ -102,7 +103,7 @@ class DeepLinkHandler @Inject constructor(
                 if (linkId != null && linkId.isNotEmpty() && linkId.length > 10) {
                     val baseUrl = "${uri.scheme}://${uri.host}"
                     val apiUrl = if (uri.host?.contains("curtain.proteo.info") == true) {
-                        "https://api.curtain.proteo.info"
+                        "${CurtainConstants.PredefinedHosts.CELSUS_BACKEND}/"
                     } else {
                         "$baseUrl/api"
                     }
@@ -183,7 +184,7 @@ class DeepLinkHandler @Inject constructor(
 
         return DeepLinkResult.CollectionData(
             collectionId = collectionId,
-            apiURL = "https://api.curtain.proteo.info",
+            apiURL = "${CurtainConstants.PredefinedHosts.CELSUS_BACKEND}/",
             frontendURL = uri.toString()
         )
     }
@@ -234,17 +235,25 @@ class DeepLinkHandler @Inject constructor(
         )
     }
 
-    private fun processWebLink(uri: Uri): DeepLinkResult? {
+    private suspend fun processWebLink(uri: Uri): DeepLinkResult? {
         val pathSegments = uri.pathSegments
         if (pathSegments.isEmpty()) return null
 
         val linkId = pathSegments.lastOrNull()?.removePrefix("#/") ?: return null
+        val hostname = "${CurtainConstants.PredefinedHosts.CELSUS_BACKEND}/"
 
-        return DeepLinkResult.CurtainDataset(
-            linkId = linkId,
-            apiURL = "https://api.curtain.proteo.info",
-            frontendURL = uri.toString()
+        val result = curtainRepository.fetchCurtainByLinkIdAndHost(
+            linkId, hostname, uri.toString()
         )
+        return if (result.isSuccess) {
+            DeepLinkResult.CurtainDataset(
+                linkId = linkId,
+                apiURL = hostname,
+                frontendURL = uri.toString()
+            )
+        } else {
+            null
+        }
     }
 }
 

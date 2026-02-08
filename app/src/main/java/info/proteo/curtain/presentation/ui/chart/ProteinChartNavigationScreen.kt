@@ -14,12 +14,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import info.proteo.curtain.presentation.ui.dialogs.ExportFormat
+import info.proteo.curtain.presentation.ui.dialogs.ExportPlotDialog
+import info.proteo.curtain.presentation.utils.FileExportUtils
 import info.proteo.curtain.presentation.viewmodel.ProteinChartViewModel
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 enum class ChartType {
     BAR_CHART,
@@ -48,6 +53,11 @@ fun ProteinChartNavigationScreen(
     var selectedChartType by remember { mutableStateOf(ChartType.BAR_CHART) }
     var showProteinInfo by remember { mutableStateOf(false) }
     var showChartSettings by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var currentWebView by remember { mutableStateOf<WebView?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var enableImputation by remember { mutableStateOf(false) }
     var averageBarErrorType by remember { mutableStateOf("Standard Error") }
@@ -108,13 +118,24 @@ fun ProteinChartNavigationScreen(
         topBar = {
             TopAppBar(
                 title = {
+                    val isPTM = curtainData?.differentialForm?.isPTM == true
                     Column {
-                        Text("Protein Charts")
-                        currentProteinId?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall
-                            )
+                        if (!geneName.isNullOrEmpty()) {
+                            Text(geneName)
+                            currentProteinId?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        } else {
+                            Text(if (isPTM) "Site Charts" else "Protein Charts")
+                            currentProteinId?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
                         }
                     }
                 },
@@ -124,8 +145,12 @@ fun ProteinChartNavigationScreen(
                     }
                 },
                 actions = {
+                    val isPTMAction = curtainData?.differentialForm?.isPTM == true
+                    IconButton(onClick = { showExportDialog = true }) {
+                        Icon(Icons.Default.FileDownload, "Export")
+                    }
                     IconButton(onClick = { showProteinInfo = true }) {
-                        Icon(Icons.Default.Info, "Protein Info")
+                        Icon(Icons.Default.Info, if (isPTMAction) "Site Info" else "Protein Info")
                     }
                     IconButton(onClick = { showChartSettings = true }) {
                         Icon(Icons.Default.Settings, "Chart Settings")
@@ -206,20 +231,36 @@ fun ProteinChartNavigationScreen(
                     }
                 }
                 else -> {
+                    val onWebViewCreated = { webView: WebView -> currentWebView = webView }
+                    val onExported = { json: String ->
+                        scope.launch {
+                            try {
+                                val jsonObj = JSONObject(json)
+                                val format = jsonObj.getString("format")
+                                val filename = jsonObj.getString("filename")
+                                val dataUrl = jsonObj.getString("dataUrl")
+                                val result = FileExportUtils.exportFromDataUrl(context, filename, dataUrl, format)
+                                exportMessage = result.getOrNull() ?: result.exceptionOrNull()?.message
+                            } catch (e: Exception) {
+                                exportMessage = "Export failed: ${e.message}"
+                            }
+                        }
+                        Unit
+                    }
                     when (selectedChartType) {
                         ChartType.BAR_CHART -> {
                             barChartHtml?.let { html ->
-                                ChartWebView(html = html)
+                                ChartWebView(html = html, onWebViewCreated = onWebViewCreated, onImageExported = onExported)
                             }
                         }
                         ChartType.AVERAGE_BAR_CHART -> {
                             averageBarChartHtml?.let { html ->
-                                ChartWebView(html = html)
+                                ChartWebView(html = html, onWebViewCreated = onWebViewCreated, onImageExported = onExported)
                             }
                         }
                         ChartType.VIOLIN_PLOT -> {
                             violinPlotHtml?.let { html ->
-                                ChartWebView(html = html)
+                                ChartWebView(html = html, onWebViewCreated = onWebViewCreated, onImageExported = onExported)
                             }
                         }
                     }
@@ -236,6 +277,42 @@ fun ProteinChartNavigationScreen(
             viewModel = viewModel,
             onDismiss = { showProteinInfo = false }
         )
+    }
+
+    if (showExportDialog) {
+        val defaultName = when (selectedChartType) {
+            ChartType.BAR_CHART -> "bar_chart"
+            ChartType.AVERAGE_BAR_CHART -> "average_bar_chart"
+            ChartType.VIOLIN_PLOT -> "violin_plot"
+        } + "_${currentProteinId ?: "plot"}"
+        ExportPlotDialog(
+            defaultFileName = defaultName,
+            onDismiss = { showExportDialog = false },
+            onExport = { fileName, format ->
+                val formatStr = when (format) {
+                    ExportFormat.SVG -> "svg"
+                    ExportFormat.PNG -> "png"
+                }
+                val jsObject = when (selectedChartType) {
+                    ChartType.BAR_CHART -> "window.BarChart"
+                    ChartType.AVERAGE_BAR_CHART -> "window.AverageBarChart"
+                    ChartType.VIOLIN_PLOT -> "window.ViolinPlot"
+                }
+                currentWebView?.evaluateJavascript(
+                    "$jsObject.exportPlot('$formatStr', '$fileName')",
+                    null
+                ) ?: run { exportMessage = "Chart not ready for export" }
+                showExportDialog = false
+            }
+        )
+    }
+
+    exportMessage?.let { message ->
+        LaunchedEffect(message) {
+            kotlinx.coroutines.delay(3000)
+            exportMessage = null
+        }
+        Snackbar(modifier = Modifier.padding(16.dp)) { Text(message) }
     }
 
     if (showChartSettings) {
@@ -286,7 +363,11 @@ fun ProteinChartNavigationScreen(
 }
 
 @Composable
-fun ChartWebView(html: String) {
+fun ChartWebView(
+    html: String,
+    onWebViewCreated: (WebView) -> Unit = {},
+    onImageExported: (String) -> Unit = {}
+) {
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
 
     AndroidView(
@@ -307,7 +388,11 @@ fun ChartWebView(html: String) {
                     setBackgroundColor(android.graphics.Color.WHITE)
                 }
 
-                android.util.Log.d("ChartWebView", "Loading HTML, length: ${html.length}")
+                val bridge = info.proteo.curtain.domain.service.WebViewJavaScriptBridge(
+                    onImageExported = { json -> onImageExported(json) }
+                )
+                addJavascriptInterface(bridge, "AndroidBridge")
+                onWebViewCreated(this)
             }
         },
         update = { webView ->
@@ -317,8 +402,7 @@ fun ChartWebView(html: String) {
                 webView.setBackgroundColor(android.graphics.Color.WHITE)
             }
 
-            android.util.Log.d("ChartWebView", "Updating WebView with HTML")
-            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            webView.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
         },
         modifier = Modifier.fillMaxSize()
     )
@@ -443,7 +527,7 @@ fun ChartSettingsDialog(
                     }
                 }
 
-                Divider()
+                HorizontalDivider()
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -609,10 +693,17 @@ fun ProteinInfoDialog(
 ) {
     val foldChange by viewModel.foldChange.collectAsState()
     val pValue by viewModel.pValue.collectAsState()
+    val accession by viewModel.accession.collectAsState()
+    val position by viewModel.position.collectAsState()
+    val peptideSequence by viewModel.peptideSequence.collectAsState()
+    val score by viewModel.score.collectAsState()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Protein Information") },
+        title = {
+            val isPTM = curtainData?.differentialForm?.isPTM == true
+            Text(if (isPTM) "Site Information" else "Protein Information")
+        },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -634,7 +725,7 @@ fun ProteinInfoDialog(
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Protein ID",
+                        text = if (curtainData?.differentialForm?.isPTM == true) "Site ID" else "Protein ID",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -644,10 +735,66 @@ fun ProteinInfoDialog(
                     )
                 }
 
+                accession?.let { acc ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Accession",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = acc,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                position?.let { pos ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Position",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = pos,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                peptideSequence?.let { seq ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Peptide Sequence",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = seq,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                score?.let { s ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Score",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = String.format("%.4f", s),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
                 curtainData?.settings?.let { settings ->
                     if (settings.volcanoConditionLabels.leftCondition.isNotEmpty() &&
                         settings.volcanoConditionLabels.rightCondition.isNotEmpty()) {
-                        Divider()
+                        HorizontalDivider()
 
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(

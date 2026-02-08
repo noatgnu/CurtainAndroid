@@ -1,0 +1,148 @@
+{
+  "differentialForm": {
+    "_primaryIDs": "Index",
+    "_geneNames": "",
+    "_foldChange": "Welch's T-test Difference AO_UT",
+    "_transformFC": false,
+    "_significant": "-Log Welch's T-test p-value AO_UT",
+    "_transformSignificant": false,
+    "_comparison": "CurtainSetComparison",
+    "_comparisonSelect": "1",
+    "_accession": "ProteinID",
+    "_position": "Position",
+    "_positionPeptide": "Position.in.peptide",
+    "_peptideSequence": "Peptide",
+    "_score": "MaxPepProb",
+    "_sequence": "SequenceWindow",
+    "_reverseFoldChange": false
+  },
+  "rawForm": {
+    "_primaryIDs": "T: Index",
+    "_samples": ["UT.01", "AO.01", "UT.02", "AO.02", "UT.03", "AO.03"]
+  },
+  "settings": {
+    "currentID": "dd9ad30f-5c46-472c-8c1a-5936babb7652",
+    "pCutoff": 0.05,
+    "log2FCCutoff": 0.6,
+    "description": "Comprehensive PTM fixture test",
+    "version": 2,
+    "variantCorrection": {
+      "P12345": "P12345-2"
+    },
+    "customSequences": {
+      "Q98765": "MAAAAAAGAGPEMVRGQVFDVGPRYTNLSYIGEGAYGMVCUSTOM"
+    },
+    "customPTMData": {
+      "PhosphoSiteCustom": {
+        "P12345": {
+          "P12345": [
+            {"position": 15, "residue": "S"},
+            {"position": 32, "residue": "T"},
+            {"position": 99, "residue": "S"}
+          ],
+          "P12345-2": [
+            {"position": 18, "residue": "Y"}
+          ]
+        },
+        "Q98765": {
+          "Q98765": [
+            {"position": 183, "residue": "T"},
+            {"position": 185, "residue": "Y"}
+          ]
+        }
+      },
+      "CustomDB2": {
+        "P12345": {
+          "P12345": [
+            {"position": 50, "residue": "S"},
+            {"position": 60, "residue": "T"}
+          ]
+        }
+      }
+    }
+  },
+  "differentialData": [
+    {
+      "Index": "P12345_S15_1",
+      "ProteinID": "P12345",
+      "Position": "S15",
+      "Position.in.peptide": "5",
+      "Peptide": "MSTGLQVKPVADLAYS[Phospho]AQPFG",
+      "MaxPepProb": 0.99,
+      "SequenceWindow": "ADLAYSAQP",
+      "Welch's T-test Difference AO_UT": 2.5,
+      "-Log Welch's T-test p-value AO_UT": 3.2,
+      "CurtainSetComparison": "AO_UT"
+    },
+    {
+      "Index": "P12345_T32_1",
+      "ProteinID": "P12345",
+      "Position": "T32",
+      "Position.in.peptide": "8",
+      "Peptide": "VSPGPSRAAPPSPHT[Phospho]PSS",
+      "MaxPepProb": 0.95,
+      "SequenceWindow": "PHTPSSPSS",
+      "Welch's T-test Difference AO_UT": 1.2,
+      "-Log Welch's T-test p-value AO_UT": 1.8,
+      "CurtainSetComparison": "AO_UT"
+    },
+    {
+      "Index": "P12345_Y45_1",
+      "ProteinID": "P12345",
+      "Position": "Y45",
+      "Position.in.peptide": "10",
+      "Peptide": "SSSSASSSPY[Phospho]SSPSSPSS",
+      "MaxPepProb": 0.98,
+      "SequenceWindow": "PYSSPSPSS",
+      "Welch's T-test Difference AO_UT": -1.5,
+      "-Log Welch's T-test p-value AO_UT": 2.1,
+      "CurtainSetComparison": "AO_UT"
+    },
+    {
+      "Index": "Q98765_T183_1",
+      "ProteinID": "Q98765",
+      "Position": "T183",
+      "Position.in.peptide": "12",
+      "Peptide": "VADPDHDHTGFLT[Phospho]EYVATR",
+      "MaxPepProb": 0.99,
+      "SequenceWindow": "TEYVATRWY",
+      "Welch's T-test Difference AO_UT": 3.8,
+      "-Log Welch's T-test p-value AO_UT": 4.5,
+      "CurtainSetComparison": "AO_UT"
+    },
+    {
+      "Index": "Q98765_Y185_1",
+      "ProteinID": "Q98765",
+      "Position": "Y185",
+      "Position.in.peptide": "14",
+      "Peptide": "PDHDHTGFLTEY[Phospho]VATRWYR",
+      "MaxPepProb": 0.97,
+      "SequenceWindow": "YVATRWYRA",
+      "Welch's T-test Difference AO_UT": 2.9,
+      "-Log Welch's T-test p-value AO_UT": 3.8,
+      "CurtainSetComparison": "AO_UT"
+    },
+    {
+      "Index": "Q98765_S203_1",
+      "ProteinID": "Q98765",
+      "Position": "S203",
+      "Position.in.peptide": "6",
+      "Peptide": "GYTKS[Phospho]IDIWSVG",
+      "MaxPepProb": 0.92,
+      "SequenceWindow": "SIDIWSVGC",
+      "Welch's T-test Difference AO_UT": 0.4,
+      "-Log Welch's T-test p-value AO_UT": 0.9,
+      "CurtainSetComparison": "AO_UT"
+    }
+  ],
+  "rawData": [
+    {"T: Index": "P12345_S15_1", "UT.01": 25.5, "AO.01": 28.0, "UT.02": 24.8, "AO.02": 27.5, "UT.03": 25.2, "AO.03": 27.8},
+    {"T: Index": "P12345_T32_1", "UT.01": 22.1, "AO.01": 23.3, "UT.02": 21.8, "AO.02": 23.0, "UT.03": 22.0, "AO.03": 23.2},
+    {"T: Index": "P12345_Y45_1", "UT.01": 20.5, "AO.01": 19.0, "UT.02": 20.8, "AO.02": 19.3, "UT.03": 20.3, "AO.03": 18.8},
+    {"T: Index": "Q98765_T183_1", "UT.01": 18.2, "AO.01": 22.0, "UT.02": 18.5, "AO.02": 22.3, "UT.03": 18.0, "AO.03": 21.8},
+    {"T: Index": "Q98765_Y185_1", "UT.01": 19.5, "AO.01": 22.4, "UT.02": 19.8, "AO.02": 22.7, "UT.03": 19.3, "AO.03": 22.2},
+    {"T: Index": "Q98765_S203_1", "UT.01": 21.0, "AO.01": 21.4, "UT.02": 20.8, "AO.02": 21.2, "UT.03": 21.1, "AO.03": 21.5}
+  ],
+  "password": "",
+  "fetchUniProt": true
+}

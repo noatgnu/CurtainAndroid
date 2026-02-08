@@ -7,6 +7,7 @@ import info.proteo.curtain.data.local.entity.CollectionSessionEntity
 import info.proteo.curtain.data.local.entity.CurtainCollectionEntity
 import info.proteo.curtain.data.local.entity.CurtainEntity
 import info.proteo.curtain.data.repository.CurtainCollectionRepository
+import info.proteo.curtain.domain.preferences.ThemePreference
 import info.proteo.curtain.domain.repository.CurtainRepository
 import info.proteo.curtain.domain.repository.SiteSettingsRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,7 +29,8 @@ import javax.inject.Inject
 class CurtainViewModel @Inject constructor(
     private val curtainRepository: CurtainRepository,
     private val siteSettingsRepository: SiteSettingsRepository,
-    private val collectionRepository: CurtainCollectionRepository
+    private val collectionRepository: CurtainCollectionRepository,
+    private val themePreference: ThemePreference
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
@@ -58,22 +60,25 @@ class CurtainViewModel @Inject constructor(
     private val _selectionModeCollectionId = MutableStateFlow<Long?>(null)
     val selectionModeCollectionId: StateFlow<Long?> = _selectionModeCollectionId.asStateFlow()
 
-    /**
-     * Curtains list combined with search query.
-     * Automatically filters results when search query changes.
-     */
+    private val _curtainTypeFilter = MutableStateFlow(ThemePreference.FILTER_ALL)
+    val curtainTypeFilter: StateFlow<String> = _curtainTypeFilter.asStateFlow()
+
     val curtains: StateFlow<List<CurtainEntity>> = combine(
         curtainRepository.getAllCurtains(),
-        _searchQuery
-    ) { curtainsList, query ->
-        if (query.isEmpty()) {
-            curtainsList
-        } else {
-            curtainsList.filter {
+        _searchQuery,
+        _curtainTypeFilter
+    ) { curtainsList, query, typeFilter ->
+        var filtered = curtainsList
+        if (typeFilter != ThemePreference.FILTER_ALL) {
+            filtered = filtered.filter { it.curtainType == typeFilter }
+        }
+        if (query.isNotEmpty()) {
+            filtered = filtered.filter {
                 it.dataDescription.contains(query, ignoreCase = true) ||
                         it.linkId.contains(query, ignoreCase = true)
             }
         }
+        filtered
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -82,6 +87,11 @@ class CurtainViewModel @Inject constructor(
 
     init {
         initializeDefaultSites()
+        viewModelScope.launch {
+            themePreference.curtainTypeFilter.collect { filter ->
+                _curtainTypeFilter.value = filter
+            }
+        }
     }
 
     /**
@@ -109,6 +119,12 @@ class CurtainViewModel @Inject constructor(
         _searchQuery.value = query
     }
 
+    fun updateCurtainTypeFilter(filter: String) {
+        _curtainTypeFilter.value = filter
+        viewModelScope.launch {
+            themePreference.setCurtainTypeFilter(filter)
+        }
+    }
 
     /**
      * Download curtain data file with progress tracking.
@@ -224,6 +240,62 @@ class CurtainViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _error.value = "Error loading example: ${e.message}"
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun loadExamplePTMCurtain() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+
+            try {
+                val result = curtainRepository.fetchCurtainByLinkIdAndHost(
+                    linkId = info.proteo.curtain.util.CurtainConstants.ExamplePTMData.UNIQUE_ID,
+                    hostname = info.proteo.curtain.util.CurtainConstants.ExamplePTMData.API_URL,
+                    frontendURL = info.proteo.curtain.util.CurtainConstants.ExamplePTMData.FRONTEND_URL
+                )
+
+                result.onSuccess {
+                    _isLoading.value = false
+                }.onFailure { e ->
+                    _error.value = "Failed to load example PTM curtain: ${e.message}"
+                    _isLoading.value = false
+                }
+            } catch (e: Exception) {
+                _error.value = "Error loading PTM example: ${e.message}"
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun loadBothExampleCurtains() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+
+            try {
+                val tpResult = curtainRepository.fetchCurtainByLinkIdAndHost(
+                    linkId = info.proteo.curtain.util.CurtainConstants.ExampleData.UNIQUE_ID,
+                    hostname = info.proteo.curtain.util.CurtainConstants.ExampleData.API_URL,
+                    frontendURL = info.proteo.curtain.util.CurtainConstants.ExampleData.FRONTEND_URL
+                )
+                tpResult.onFailure { e ->
+                    _error.value = "Failed to load TP example: ${e.message}"
+                }
+
+                val ptmResult = curtainRepository.fetchCurtainByLinkIdAndHost(
+                    linkId = info.proteo.curtain.util.CurtainConstants.ExamplePTMData.UNIQUE_ID,
+                    hostname = info.proteo.curtain.util.CurtainConstants.ExamplePTMData.API_URL,
+                    frontendURL = info.proteo.curtain.util.CurtainConstants.ExamplePTMData.FRONTEND_URL
+                )
+                ptmResult.onFailure { e ->
+                    _error.value = "Failed to load PTM example: ${e.message}"
+                }
+            } catch (e: Exception) {
+                _error.value = "Error loading examples: ${e.message}"
+            } finally {
                 _isLoading.value = false
             }
         }

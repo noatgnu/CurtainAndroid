@@ -11,22 +11,22 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 
 enum class ExportFormat(val displayName: String, val extension: String) {
-    HTML("HTML (Interactive)", "html"),
+    SVG("SVG (Vector)", "svg"),
     PNG("PNG (Image)", "png")
 }
 
 @Composable
 fun ExportPlotDialog(
-    defaultFileName: String = "volcano_plot",
+    defaultFileName: String = "plot",
     onDismiss: () -> Unit,
     onExport: (fileName: String, format: ExportFormat) -> Unit
 ) {
     var fileName by remember { mutableStateOf(defaultFileName) }
-    var selectedFormat by remember { mutableStateOf(ExportFormat.HTML) }
+    var selectedFormat by remember { mutableStateOf(ExportFormat.SVG) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Export Volcano Plot") },
+        title = { Text("Export Plot") },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -50,7 +50,7 @@ fun ExportPlotDialog(
                         .selectableGroup(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    ExportFormat.values().forEach { format ->
+                    ExportFormat.entries.forEach { format ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -74,8 +74,8 @@ fun ExportPlotDialog(
                                 )
                                 Text(
                                     text = when (format) {
-                                        ExportFormat.HTML -> "Save as interactive HTML file"
-                                        ExportFormat.PNG -> "Save as static PNG image"
+                                        ExportFormat.SVG -> "Scalable vector format"
+                                        ExportFormat.PNG -> "Static raster image"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -86,7 +86,7 @@ fun ExportPlotDialog(
                 }
 
                 Text(
-                    text = "File will be saved as: ${fileName}.${selectedFormat.extension}",
+                    text = "File will be saved to Downloads/${fileName}.${selectedFormat.extension}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -15,7 +15,12 @@ data class ProcessedProteomicsDataEntity(
     val geneNames: String?,
     val foldChange: Double?,
     val significant: Double?,
-    val comparison: String
+    val comparison: String,
+    val accession: String? = null,
+    val position: String? = null,
+    val positionPeptide: String? = null,
+    val peptideSequence: String? = null,
+    val score: Double? = null
 )
 
 @Entity(

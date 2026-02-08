@@ -164,10 +164,8 @@ class BarChartGenerator @Inject constructor(
             "data" to tracesAndTicks.first,
             "layout" to layout,
             "config" to mapOf(
-                "displayModeBar" to true,
-                "displaylogo" to false,
-                "responsive" to true,
-                "modeBarButtonsToRemove" to listOf("sendDataToCloud", "editInChartStudio")
+                "displayModeBar" to false,
+                "responsive" to true
             )
         )
 

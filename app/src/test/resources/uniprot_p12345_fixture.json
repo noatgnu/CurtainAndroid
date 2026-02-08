@@ -1,0 +1,23 @@
+{
+  "Entry": "P12345",
+  "Gene Names": "GENE1; GENE1_ALT",
+  "Protein names": "Test protein 1 (Alternative name 1)",
+  "Organism": "Homo sapiens (Human)",
+  "Sequence": "MSTGLQVKPVADLAYAQPFGASEIPRVSVSPGPSRAAPPSPHPSPSSTSSSSASSSPSSPSSSSPSPSPASSPSSPSSPASPSPSASPSSPSSPASPSPSPSSSSSPSSPSSPASPSSPSSPARPSSPRPSPSPSPSPTSPSPSRTPSPSPSPSPSPSHPSPSPSPSSPTPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSPSP",
+  "Length": "213",
+  "Domain [FT]": "DOMAIN 1..50; /note=\"Kinase domain\"; DOMAIN 100..150; /note=\"SH2 domain\"",
+  "Modified residue": [
+    {"position": 15, "residue": "S", "modType": "Phosphoserine"},
+    {"position": 32, "residue": "T", "modType": "Phosphothreonine"},
+    {"position": 45, "residue": "Y", "modType": "Phosphotyrosine"},
+    {"position": 78, "residue": "S", "modType": "Phosphoserine"},
+    {"position": 112, "residue": "S", "modType": "Phosphoserine"},
+    {"position": 156, "residue": "T", "modType": "Phosphothreonine"},
+    {"position": 189, "residue": "S", "modType": "Phosphoserine"},
+    {"position": 25, "residue": "K", "modType": "N6-acetyllysine"},
+    {"position": 67, "residue": "K", "modType": "N6-succinyllysine"}
+  ],
+  "Active site": "ACT_SITE 35; /note=\"Proton acceptor\"",
+  "Binding site": "BINDING 40..42; /note=\"ATP\"; BINDING 120..125; /note=\"Substrate\"",
+  "Alternative products (isoforms)": "Event=Alternative splicing; Named isoforms=3; Name=1; IsoId=P12345-1; Sequence=Displayed; Name=2; IsoId=P12345-2; Sequence=VSP_001234; Name=3; IsoId=P12345-3; Sequence=VSP_001235"
+}

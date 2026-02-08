@@ -2,6 +2,11 @@ package info.proteo.curtain.di
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializationContext
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
+import info.proteo.curtain.domain.model.CurtainDifferentialForm
+import java.lang.reflect.Type
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -114,7 +119,50 @@ object NetworkModule {
     @Singleton
     fun provideGson(): Gson {
         return GsonBuilder()
+            .registerTypeAdapter(
+                CurtainDifferentialForm::class.java,
+                CurtainDifferentialFormDeserializer()
+            )
             .create()
+    }
+
+    private class CurtainDifferentialFormDeserializer : JsonDeserializer<CurtainDifferentialForm> {
+        override fun deserialize(
+            json: JsonElement,
+            typeOfT: Type,
+            context: JsonDeserializationContext
+        ): CurtainDifferentialForm {
+            val obj = json.asJsonObject
+
+            val comparisonSelect = when {
+                obj.has("_comparisonSelect") && obj.get("_comparisonSelect").isJsonArray -> {
+                    obj.getAsJsonArray("_comparisonSelect").map { it.asString }
+                }
+                obj.has("_comparisonSelect") && obj.get("_comparisonSelect").isJsonPrimitive -> {
+                    val value = obj.get("_comparisonSelect").asString
+                    if (value.isNotEmpty()) listOf(value) else emptyList()
+                }
+                else -> emptyList()
+            }
+
+            return CurtainDifferentialForm(
+                primaryIDs = obj.get("_primaryIDs")?.asString ?: "",
+                geneNames = obj.get("_geneNames")?.asString ?: "",
+                foldChange = obj.get("_foldChange")?.asString ?: "",
+                transformFC = obj.get("_transformFC")?.asBoolean ?: false,
+                significant = obj.get("_significant")?.asString ?: "",
+                transformSignificant = obj.get("_transformSignificant")?.asBoolean ?: false,
+                comparison = obj.get("_comparison")?.asString ?: "",
+                comparisonSelect = comparisonSelect,
+                reverseFoldChange = obj.get("_reverseFoldChange")?.asBoolean ?: false,
+                accession = obj.get("_accession")?.asString ?: "",
+                position = obj.get("_position")?.asString ?: "",
+                positionPeptide = obj.get("_positionPeptide")?.asString ?: "",
+                peptideSequence = obj.get("_peptideSequence")?.asString ?: "",
+                score = obj.get("_score")?.asString ?: "",
+                sequence = obj.get("_sequence")?.asString ?: ""
+            )
+        }
     }
 
     /**

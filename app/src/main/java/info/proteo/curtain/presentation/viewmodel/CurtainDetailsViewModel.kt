@@ -53,6 +53,98 @@ class CurtainDetailsViewModel @Inject constructor(
     private val _sessionName = MutableStateFlow<String?>(null)
     val sessionName: StateFlow<String?> = _sessionName.asStateFlow()
 
+    fun setVariantCorrection(accession: String, variant: String?) {
+        val currentData = _curtainData.value ?: return
+        val updatedVariants = currentData.settings.variantCorrection.toMutableMap()
+        val updatedCustomSeq = currentData.settings.customSequences.toMutableMap()
+
+        if (variant != null) {
+            updatedVariants[accession] = variant
+            updatedCustomSeq.remove(accession)
+        } else {
+            updatedVariants.remove(accession)
+        }
+
+        val updatedSettings = currentData.settings.copy(
+            variantCorrection = updatedVariants,
+            customSequences = updatedCustomSeq
+        )
+        _curtainData.value = currentData.copy(_settings = updatedSettings)
+    }
+
+    fun setCustomSequence(accession: String, sequence: String?) {
+        val currentData = _curtainData.value ?: return
+        val updatedVariants = currentData.settings.variantCorrection.toMutableMap()
+        val updatedCustomSeq = currentData.settings.customSequences.toMutableMap()
+
+        if (sequence != null && sequence.isNotEmpty()) {
+            updatedCustomSeq[accession] = sequence
+            updatedVariants.remove(accession)
+        } else {
+            updatedCustomSeq.remove(accession)
+        }
+
+        val updatedSettings = currentData.settings.copy(
+            variantCorrection = updatedVariants,
+            customSequences = updatedCustomSeq
+        )
+        _curtainData.value = currentData.copy(_settings = updatedSettings)
+    }
+
+    fun clearVariantForAccession(accession: String) {
+        val currentData = _curtainData.value ?: return
+        val updatedVariants = currentData.settings.variantCorrection.toMutableMap()
+        val updatedCustomSeq = currentData.settings.customSequences.toMutableMap()
+
+        updatedVariants.remove(accession)
+        updatedCustomSeq.remove(accession)
+
+        val updatedSettings = currentData.settings.copy(
+            variantCorrection = updatedVariants,
+            customSequences = updatedCustomSeq
+        )
+        _curtainData.value = currentData.copy(_settings = updatedSettings)
+    }
+
+    fun getVariantSourceLabel(accession: String): String {
+        val currentData = _curtainData.value ?: return accession
+
+        val customSeq = currentData.settings.customSequences[accession]
+        if (customSeq is String && customSeq.isNotEmpty()) return "$accession (custom)"
+
+        val variant = currentData.settings.variantCorrection[accession]
+        if (variant is String && variant.isNotEmpty()) return variant
+
+        return accession
+    }
+
+    suspend fun getAvailableIsoformsForAccession(accession: String): List<String> {
+        val linkId = _curtainData.value?.linkId ?: return emptyList()
+        val baseAccession = accession.split(";").first().trim().replace(Regex("-\\d+$"), "")
+        val uniprotJson = proteomicsDataService.getUniProtDataJson(linkId, baseAccession)
+        if (uniprotJson == null) return emptyList()
+
+        return try {
+            val json = org.json.JSONObject(uniprotJson)
+            val altProducts = json.optString("Alternative products (isoforms)", "")
+            if (altProducts.isEmpty()) return emptyList()
+
+            val isoforms = mutableListOf<String>()
+            val parts = altProducts.split(Regex("[; ]"))
+            for (part in parts) {
+                if (part.startsWith("IsoId=")) {
+                    val isoId = part.removePrefix("IsoId=").trim()
+                    if (isoId.isNotEmpty()) {
+                        isoforms.add(isoId)
+                    }
+                }
+            }
+            isoforms
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     fun loadCurtainData(linkId: String) {
         // Don't reload if already loaded for this linkId
         if (_curtainData.value != null && _isLoading.value == false) {
@@ -100,7 +192,7 @@ class CurtainDetailsViewModel @Inject constructor(
                     withContext(Dispatchers.Main) {
                         _loadingStatus.value = "Loading from database..."
                     }
-                    dbCurtainData
+                    ensureLinkIdMatches(dbCurtainData, linkId)
                 } else {
                     android.util.Log.d("CurtainDetailsViewModel", "Parsing from JSON file")
                     withContext(Dispatchers.Main) {
@@ -108,28 +200,30 @@ class CurtainDetailsViewModel @Inject constructor(
                     }
                     val result = curtainDataService.loadCurtainDataFromFile(curtain.file)
                     result.getOrNull()?.let { loadedData ->
-                        withContext(Dispatchers.Main) {
-                            _loadingStatus.value = "Building protein mappings..."
-                        }
-                        proteinMappingService.ensureMappingsExist(loadedData.curtainData) { current, total ->
-                            _mappingProgress.value = Pair(current, total)
-                        }
+                        val correctedData = ensureLinkIdMatches(loadedData.curtainData, linkId)
 
                         withContext(Dispatchers.Main) {
                             _loadingStatus.value = "Building database..."
                         }
                         proteomicsDataService.buildProteomicsDataIfNeeded(
-                            linkId = loadedData.curtainData.linkId,
+                            linkId = linkId,
                             rawTsv = loadedData.rawTsv,
                             processedTsv = loadedData.processedTsv,
-                            rawForm = loadedData.curtainData.rawForm,
-                            differentialForm = loadedData.curtainData.differentialForm,
-                            curtainData = loadedData.curtainData,
+                            rawForm = correctedData.rawForm,
+                            differentialForm = correctedData.differentialForm,
+                            curtainData = correctedData,
                             onProgress = { status ->
                                 _loadingStatus.value = status
                             }
                         )
-                        loadedData.curtainData
+
+                        withContext(Dispatchers.Main) {
+                            _loadingStatus.value = "Building protein mappings..."
+                        }
+                        proteinMappingService.ensureMappingsExist(correctedData) { current, total ->
+                            _mappingProgress.value = Pair(current, total)
+                        }
+                        correctedData
                     }
                 }
 
@@ -161,6 +255,12 @@ class CurtainDetailsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun ensureLinkIdMatches(data: CurtainData, entityLinkId: String): CurtainData {
+        if (data.linkId == entityLinkId) return data
+        android.util.Log.w("CurtainDetailsViewModel", "CurtainData linkId mismatch: JSON has '${data.linkId}', entity has '$entityLinkId'. Overriding.")
+        return data.copy(_settings = data.settings.copy(currentId = entityLinkId))
     }
 
     fun updateSettings(newSettings: CurtainSettings) {
@@ -206,7 +306,11 @@ class CurtainDetailsViewModel @Inject constructor(
             pValue = 10.0.pow(-(entity.significant ?: 0.0)),
             negLog10PValue = entity.significant ?: 0.0,
             color = "#808080",
-            isSignificant = false
+            isSignificant = false,
+            accession = entity.accession,
+            position = entity.position,
+            peptideSequence = entity.peptideSequence,
+            score = entity.score
         )
     }
 
@@ -421,24 +525,81 @@ class CurtainDetailsViewModel @Inject constructor(
             try {
                 withContext(Dispatchers.Main) {
                     _isLoading.value = true
-                    _loadingStatus.value = "Clearing cached data..."
+                    _loadingStatus.value = "Starting rebuild..."
                     _error.value = null
-                }
-
-                proteomicsDataService.clearDatabaseForLinkId(linkId)
-                proteinMappingService.clearMappingsForLinkId(linkId)
-
-                withContext(Dispatchers.Main) {
                     _curtainData.value = null
                     _volcanoPlotHtml.value = null
                     _proteinCount.value = 0
-                    _isLoading.value = false
-                    _loadingStatus.value = null
                 }
+
+                val curtain = curtainRepository.getCurtainById(linkId)
+                val filePath = curtain?.file
+
+                if (filePath.isNullOrEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        _error.value = "No data file available. Please download the dataset first."
+                        _isLoading.value = false
+                        _loadingStatus.value = null
+                    }
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) {
+                    _loadingStatus.value = "Parsing dataset file..."
+                }
+
+                val result = curtainDataService.loadCurtainDataFromFile(filePath)
+                val loadedData = result.getOrNull()
+
+                if (loadedData == null) {
+                    withContext(Dispatchers.Main) {
+                        _error.value = "Failed to parse data file"
+                        _isLoading.value = false
+                        _loadingStatus.value = null
+                    }
+                    return@launch
+                }
+
+                val correctedData = ensureLinkIdMatches(loadedData.curtainData, linkId)
+
+                proteinMappingService.clearMappingsForLinkId(linkId)
+
+                val updatedData = proteomicsDataService.forceRebuildProteomicsData(
+                    linkId = linkId,
+                    rawTsv = loadedData.rawTsv,
+                    processedTsv = loadedData.processedTsv,
+                    rawForm = correctedData.rawForm,
+                    differentialForm = correctedData.differentialForm,
+                    curtainData = correctedData,
+                    onProgress = { status ->
+                        _loadingStatus.value = status
+                    }
+                )
+
+                withContext(Dispatchers.Main) {
+                    _loadingStatus.value = "Building protein mappings..."
+                }
+
+                proteinMappingService.ensureMappingsExist(updatedData) { current, total ->
+                    _mappingProgress.value = Pair(current, total)
+                }
+
+                val db = proteomicsDataService.getDatabaseForLinkId(linkId)
+                val proteinCount = db.proteomicsDataDao().getDistinctProteinCount()
+
+                withContext(Dispatchers.Main) {
+                    _mappingProgress.value = null
+                    _loadingStatus.value = null
+                    _curtainData.value = updatedData
+                    _proteinCount.value = proteinCount
+                    _isLoading.value = false
+                }
+
+                generateVolcanoPlot(updatedData)
             } catch (e: Exception) {
                 android.util.Log.e("CurtainDetailsViewModel", "Error during force rebuild", e)
                 withContext(Dispatchers.Main) {
-                    _error.value = "Failed to rebuild dataset: ${e.message}"
+                    _error.value = "Failed to rebuild: ${e.message}"
                     _isLoading.value = false
                     _loadingStatus.value = null
                 }
